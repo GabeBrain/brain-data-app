@@ -6,7 +6,13 @@ authors = ["Your Name <you@example.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.10.0,<3.11"
-streamlit = "^1.27.2"
+streamlit = "^1.35.0"
+pandas = "2.2.3"
+requests = "2.32.3"
+psycopg2-binary = "2.9.10"
+plotly = "^5.22.0"
+pydeck = "^0.9.1"
+matplotlib = "3.9.3"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
