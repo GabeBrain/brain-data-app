@@ -39,7 +39,6 @@ st.markdown(
 
 df_analytics = load_base_data()
 
-# (Seção de Diagnóstico e Parâmetros sem alterações)
 if df_analytics.empty:
     st.error(
         "A tabela de análise está vazia. Execute a pipeline na página de Manutenção."
@@ -82,11 +81,11 @@ with st.container(border=True):
     with col_p1:
         st.write("**Região**")
         regiao_pesos = {
-            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 30, 5),
-            'Nordeste': st.slider("Nordeste (%)", 0, 100, 30, 5),
-            'Sul': st.slider("Sul (%)", 0, 100, 25, 5),
-            'Centro-Oeste': st.slider("Centro-Oeste (%)", 0, 100, 15, 5),
-            'Norte': st.slider("Norte (%)", 0, 100, 0, 5)
+            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 40, 5),
+            'Nordeste': st.slider("Nordeste (%)", 0, 100, 25, 5),
+            'Sul': st.slider("Sul (%)", 0, 100, 20, 5),
+            'Centro-Oeste': st.slider("Centro-Oeste (%)", 0, 100, 10, 5),
+            'Norte': st.slider("Norte (%)", 0, 100, 5, 5)
         }
         soma_regiao = sum(regiao_pesos.values())
         if soma_regiao == 100: st.success(f"Total Região: {soma_regiao}%")
@@ -110,7 +109,7 @@ with st.container(border=True):
         else: st.error(f"Total Renda: {soma_renda}% (deve ser 100%)")
     with col_p3:
         st.write("**Localidade**")
-        capital_pct = st.slider("Capital (%)", 0, 100, 55, 5)
+        capital_pct = st.slider("Capital (%)", 0, 100, 60, 5)
         localidade_pesos = {
             'Capital': capital_pct,
             'Interior': 100 - capital_pct
@@ -229,7 +228,7 @@ with st.container(border=True):
                 }
         st.rerun()
 
-# --- Exibição dos Relatórios (SEÇÃO TOTALMENTE REFEITA) ---
+# --- Exibição dos Relatórios ---
 if 'analysis_report' in st.session_state and st.session_state.analysis_report:
     report_data = st.session_state.analysis_report
     amostra_final_df = report_data['amostra_df']
@@ -244,6 +243,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
         f"Relatório gerado com base na amostra de **{final_size}** respondentes."
     )
 
+    # --- RELATÓRIO DE DESVIOS (COM EXPANDER DE EXPLICAÇÃO) ---
     st.subheader("Relatório de Desvios vs. Plano Ideal")
 
     def get_realizado(parametro, categoria):
@@ -262,7 +262,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
     deficit_df = report_df[report_df['Desvio'] < 0]
     if not deficit_df.empty:
         st.warning(
-            "Atenção: A base não suporta o plano ideal. A amostra gerada preencheu as lacunas com perfis excedentes."
+            "Atenção: A base de dados não suporta o plano ideal. A amostra gerada preencheu as lacunas com perfis excedentes."
         )
     else:
         st.success(
@@ -273,14 +273,26 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
         color = 'background-color: #FFD2D2' if row.Desvio < 0 else 'background-color: #D4EDDA' if row.Desvio > 0 else ''
         return [color] * len(row)
 
-    st.dataframe(report_df[[
+    df_to_display = report_df[[
         'Parâmetro', 'Categoria', 'N Desejado', 'N Disponível', 'N Realizado',
         'Desvio'
-    ]].style.apply(style_desvio, axis=1),
+    ]]
+    st.dataframe(df_to_display.style.apply(style_desvio, axis=1),
                  use_container_width=True,
                  hide_index=True)
 
-    # --- PAINEL DE AÇÃO PARA COLETA (REORGANIZADO) ---
+    # --- NOVO: Explicação das colunas do relatório ---
+    with st.expander("ⓘ Entenda as Colunas do Relatório de Desvios"):
+        st.markdown("""
+        - **Parâmetro:** A dimensão de análise (ex: Região, Faixa de Renda).
+        - **Categoria:** O grupo específico dentro do parâmetro (ex: Nordeste, 2.5k - 5k).
+        - **N Desejado:** O número de respondentes que este perfil deveria ter, de acordo com o tamanho da amostra e os pesos que você definiu.
+        - **N Disponível:** O número total de respondentes deste perfil que existem na base de dados (após aplicar os filtros de base).
+        - **N Realizado:** O número de respondentes deste perfil que foram efetivamente incluídos na amostra final gerada.
+        - **Desvio:** A diferença entre o "N Realizado" e o "N Desejado". Um valor negativo (vermelho) indica que faltaram respondentes deste perfil; um valor positivo (verde) indica que foram usados mais respondentes deste perfil para compensar lacunas em outros.
+        """)
+
+    # --- PAINEL DE AÇÃO PARA COLETA (COM TOTAL) ---
     st.subheader("Painel de Ação para Coleta")
     coletas_necessarias = [{
         'Região':
@@ -294,11 +306,12 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
     } for p in strata_plan if (p['target_n'] - p['available_n']) > 0]
     if coletas_necessarias:
         plano_coleta_df = pd.DataFrame(coletas_necessarias)
+        total_coletas_necessarias = plano_coleta_df['Coletas Faltantes'].sum()
+
         st.markdown(
-            "Para atingir a amostra ideal, a coleta deve focar nos seguintes pontos. Use a matriz para encontrar as melhores combinações de esforço."
+            "Para atingir a amostra ideal, seria necessário focar a coleta nos seguintes pontos. Use a matriz para encontrar as melhores combinações de esforço."
         )
 
-        # Resumos lado a lado
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("###### Por Região")
@@ -311,7 +324,6 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                 plano_coleta_df.groupby('Faixa de Renda')
                 ['Coletas Faltantes'].sum().sort_values(ascending=False))
 
-        # Matriz de Prioridades abaixo
         st.markdown("##### Matriz de Prioridades (Região vs. Renda)")
         matriz_prioridade = pd.pivot_table(plano_coleta_df,
                                            values='Coletas Faltantes',
@@ -322,12 +334,19 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
         st.dataframe(matriz_prioridade.style.background_gradient(
             cmap='Reds').format("{:.0f}"),
                      use_container_width=True)
+
+        # --- NOVO: Total de coletas necessárias ---
+        st.metric(
+            label=
+            "Total de Coletas Adicionais Necessárias para a Amostra Ideal",
+            value=f"{total_coletas_necessarias:.0f}")
+
     else:
         st.markdown(
             "A base de dados atual já possui todos os perfis necessários para o plano ideal."
         )
 
-    # --- PERFIL E AUDITORIA EM UM EXPANDER ---
+    # --- O restante do código (expanders de Perfil e Download) continua o mesmo ---
     with st.expander("Ver Perfil e Auditoria da Amostra Gerada"):
         st.subheader("Perfil da Amostra Gerada (N Forçado)")
         if not amostra_final_df.empty:
@@ -360,15 +379,12 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
         else:
             st.info("Nenhuma amostra foi gerada para exibir a auditoria.")
 
-    # --- EXTRAÇÃO DE ARQUIVOS EM UM EXPANDER ---
     with st.expander("Extrair Arquivos de Amostra (.csv)"):
         cols_para_merge = [
             'respondent_id', 'survey_id', 'genero', 'faixa_etaria', 'regiao',
             'localidade', 'renda_macro_faixa', 'intencao_compra_padronizada',
             'research_name', 'data_pesquisa'
         ]
-
-        # Amostra com N Solicitado
         st.subheader(
             f"Amostra com N Solicitado ({len(amostra_final_df)} respondentes)")
         if not amostra_final_df.empty:
@@ -405,7 +421,6 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
 
         st.markdown("---")
 
-        # Amostra Proporcional Ideal
         st.subheader(
             f"Amostra Proporcional Ideal ({len(amostra_proporcional_df)} respondentes)"
         )
@@ -430,7 +445,6 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                           counts_localidade.get('Capital', 0))
                 c2.metric("Gargalos em Interior",
                           counts_localidade.get('Interior', 0))
-
                 st.markdown("###### Matriz de Gargalos (Região vs. Renda)")
                 matriz_gargalos = pd.pivot_table(perfis_criticos_df,
                                                  index='Faixa de Renda',
