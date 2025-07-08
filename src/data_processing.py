@@ -1,9 +1,12 @@
 # src/data_processing.py
-import streamlit as st  # Mantido para st.cache_data
+import streamlit as st
 import pandas as pd
 import numpy as np
 import re
 import unicodedata
+import json
+from pathlib import Path
+from datetime import datetime
 
 # --- Dicionário de Mapeamento de Perguntas Alvo ---
 perguntas_alvo_codigos = {
@@ -491,6 +494,50 @@ def reclassificar_idade(age):
 
 
 # --- 2. LÓGICA DE RENDA ---
+@st.cache_data
+def load_classification_rules():
+    """Carrega as regras de classificação de renda do arquivo JSON."""
+    try:
+        rule_path = Path(
+            __file__
+        ).parent.parent / "config" / "regras_classificacao_renda.json"
+        with open(rule_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(
+            "Arquivo de regras 'config/regras_classificacao_renda.json' não encontrado."
+        )
+        return None
+
+
+def classify_income_by_rules(valor, data_criacao_pesquisa, all_rules):
+    """Classifica a renda e retorna uma tupla: (classe_agregada, classe_detalhada)"""
+    if pd.isna(valor) or pd.isna(data_criacao_pesquisa) or all_rules is None:
+        return (None, None)
+    if isinstance(data_criacao_pesquisa, str):
+        data_criacao_pesquisa = datetime.strptime(data_criacao_pesquisa,
+                                                  '%Y-%m-%d').date()
+    elif isinstance(data_criacao_pesquisa, pd.Timestamp) or isinstance(
+            data_criacao_pesquisa, datetime):
+        data_criacao_pesquisa = data_criacao_pesquisa.date()
+    regras_aplicaveis = None
+    for versao in all_rules.get('versoes', []):
+        data_inicio = datetime.strptime(
+            versao.get('data_inicio_validade', '1900-01-01'),
+            '%Y-%m-%d').date()
+        data_fim = datetime.strptime(
+            versao.get('data_fim_validade', '2999-12-31'), '%Y-%m-%d').date()
+        if data_inicio <= data_criacao_pesquisa <= data_fim:
+            regras_aplicaveis = versao['regras']
+            break
+    if not regras_aplicaveis:
+        return ("Versão de Regra Incompatível", "Versão de Regra Incompatível")
+    for regra in regras_aplicaveis:
+        if regra['min_renda'] <= valor <= regra['max_renda']:
+            return (regra['classe_agregada'], regra['classe_detalhada'])
+    return ("Não Classificado", "Não Classificado")
+
+
 def calcular_media_faixa(faixa: str) -> int | None:
     """
     Versão mais robusta que filtra números pequenos (provavelmente de alternativas de resposta)
@@ -695,102 +742,113 @@ def impute_missing_states(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# --- FUNÇÃO ORQUESTRADORA ---
 def process_and_standardize_data(long_df: pd.DataFrame,
                                  surveys_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Função principal que orquestra todo o processo de transformação,
-    agora incluindo a conversão da sigla do estado para o nome completo.
-    """
     if long_df.empty:
         return pd.DataFrame()
 
-    # --- 1. Pivotar e Enriquecer com Metadados ---
-    respondent_to_survey_map = long_df[[
-        'respondent_id', 'survey_id'
-    ]].drop_duplicates().set_index('respondent_id')
+    regras_de_renda = load_classification_rules()
+    if regras_de_renda is None:
+        return pd.DataFrame()
+
+    # 1. Pivotar e Enriquecer com Metadados da Pesquisa
     wide_df = long_df.pivot_table(index=['respondent_id', 'survey_id'],
                                   columns='question_code',
                                   values='answer_value',
-                                  aggfunc='first')
-    wide_df.reset_index(inplace=True)
-    wide_df = wide_df.merge(surveys_df[['survey_id', 'research_name']],
-                            on='survey_id',
-                            how='left')
+                                  aggfunc='first').reset_index()
+    wide_df = wide_df.merge(
+        surveys_df[['survey_id', 'research_name', 'creation_date']],
+        on='survey_id',
+        how='left')
 
     required_cols = [
         'Data', 'FE2P5', 'FE2P10', 'FE2P7', 'Estado', 'IC4P30', 'IC4P32',
         'FE2P3', 'Latitude', 'Longitude'
     ]
-
     for col in required_cols:
-        if col not in wide_df.columns: wide_df[col] = None
+        if col not in wide_df.columns:
+            wide_df[col] = None
 
-    # --- 2. Aplicar todas as transformações ---
+    # 2. Transformações e Validações de Dados
+    wide_df['data_pesquisa'] = pd.to_datetime(wide_df['Data'],
+                                              errors='coerce',
+                                              dayfirst=True)
+    hoje = pd.to_datetime('today').normalize()
+    future_dates_mask = wide_df['data_pesquisa'] > hoje
+    if future_dates_mask.any():
+        wide_df.loc[future_dates_mask, 'data_pesquisa'] = pd.NaT
+    wide_df['data_pesquisa'] = wide_df['data_pesquisa'].dt.date
+
     wide_df = impute_missing_states(wide_df)
 
-    # NOVAS TRANSFORMAÇÕES AQUI
-    wide_df['genero'] = wide_df[
-        'FE2P3']  # Por enquanto, apenas copiamos. Podemos padronizar depois.
+    # 3. Geração de Novas Colunas
+    wide_df['genero'] = wide_df['FE2P3']
     wide_df['latitude'] = pd.to_numeric(wide_df['Latitude'], errors='coerce')
     wide_df['longitude'] = pd.to_numeric(wide_df['Longitude'], errors='coerce')
     wide_df['estado_nome'] = wide_df['Estado_corrigido'].apply(
         map_uf_to_estado_nome)
     wide_df['regiao'] = wide_df['Estado_corrigido'].apply(map_estado_to_regiao)
-
     wide_df['localidade'] = wide_df['FE2P7'].apply(classify_cidade)
     wide_df['idade_numerica'] = pd.to_numeric(wide_df['FE2P5'],
                                               errors='coerce')
     wide_df['geracao'] = wide_df['idade_numerica'].apply(categorize_generation)
     wide_df['faixa_etaria'] = wide_df['idade_numerica'].apply(
         reclassificar_idade)
-    wide_df['renda_valor_estimado'] = wide_df['FE2P10'].apply(
-        calcular_media_faixa)
-    wide_df['renda_faixa_padronizada'] = wide_df['FE2P10'].apply(
-        classificar_faixa)
     wide_df['intencao_compra_padronizada'] = wide_df['IC4P30'].apply(
         lambda x: padronizar_resposta(x, MAPA_INTENCAO_COMPRA))
     wide_df['tempo_intencao_padronizado'] = wide_df['IC4P32'].apply(
         lambda x: padronizar_resposta(x, MAPA_TEMPO_INTENCAO))
-    wide_df['data_pesquisa'] = pd.to_datetime(wide_df['Data'],
-                                              errors='coerce',
-                                              dayfirst=True).dt.date
+    wide_df['renda_valor_estimado'] = wide_df['FE2P10'].apply(
+        calcular_media_faixa)
+    wide_df['renda_faixa_padronizada'] = wide_df['renda_valor_estimado'].apply(classificar_faixa)
+    wide_df['renda_macro_faixa'] = wide_df['renda_faixa_padronizada'].apply(map_renda_to_macro_faixa)
 
-    # --- 3. Selecionar e renomear colunas para a tabela final ---
-    final_cols = {
+
+
+    # Aplica a nova função de classificação que retorna uma tupla
+    resultados_renda = wide_df.apply(lambda row: classify_income_by_rules(
+        row['renda_valor_estimado'], row['creation_date'], regras_de_renda),
+                                     axis=1)
+    wide_df[['renda_classe_agregada', 'renda_classe_detalhada'
+             ]] = pd.DataFrame(resultados_renda.tolist(), index=wide_df.index)
+
+    # 4. Selecionar e Renomear Colunas para a Tabela Final
+    final_cols_map = {
         'respondent_id': 'respondent_id',
         'survey_id': 'survey_id',
-        'FE2P5': 'idade_original',
+        'research_name': 'research_name',
+        'data_pesquisa': 'data_pesquisa',
+        'idade_original': 'FE2P5',
         'idade_numerica': 'idade_numerica',
         'geracao': 'geracao',
         'faixa_etaria': 'faixa_etaria',
-        'FE2P10': 'renda_texto_original',
+        'renda_texto_original': 'FE2P10',
         'renda_valor_estimado': 'renda_valor_estimado',
         'renda_faixa_padronizada': 'renda_faixa_padronizada',
-        'FE2P7': 'cidade_original',
+        'renda_macro_faixa': 'renda_macro_faixa',
+        'renda_classe_agregada': 'renda_classe_agregada',
+        'renda_classe_detalhada': 'renda_classe_detalhada',
+        'cidade_original': 'FE2P7',
         'localidade': 'localidade',
-        'Estado': 'estado_original',
+        'estado_original': 'Estado',
         'estado_nome': 'estado_nome',
         'regiao': 'regiao',
-        'IC4P30': 'intencao_compra_original',
+        'intencao_compra_original': 'IC4P30',
         'intencao_compra_padronizada': 'intencao_compra_padronizada',
-        'IC4P32': 'tempo_intencao_original',
+        'tempo_intencao_original': 'IC4P32',
         'tempo_intencao_padronizado': 'tempo_intencao_padronizado',
-        'research_name': 'research_name',
-        'data_pesquisa': 'data_pesquisa',
         'genero': 'genero',
         'latitude': 'latitude',
-        'longitude': 'longitude',
+        'longitude': 'longitude'
     }
 
-    for col in final_cols.keys():
-        if col not in wide_df.columns: wide_df[col] = None
-
-    analytics_df = wide_df.reindex(columns=final_cols.keys()).copy()
-    analytics_df.rename(columns=final_cols, inplace=True)
-
-    # Adicionando a coluna de data_pesquisa ao schema final
-    if 'Data' in final_cols:
-        final_cols['data_pesquisa_original'] = final_cols.pop('Data')
+    analytics_df = pd.DataFrame()
+    for new_col, original_col in final_cols_map.items():
+        if original_col in wide_df.columns:
+            analytics_df[new_col] = wide_df[original_col]
+        else:
+            analytics_df[new_col] = None
 
     return analytics_df
 

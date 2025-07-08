@@ -294,57 +294,56 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
 
     # --- PAINEL DE AÇÃO PARA COLETA (COM TOTAL) ---
     st.subheader("Painel de Ação para Coleta")
-    coletas_necessarias = [{
-        'Região':
-        p['combo'][0],
-        'Faixa de Renda':
-        p['combo'][1],
-        'Localidade':
-        p['combo'][2],
-        'Coletas Faltantes':
-        math.ceil(p['target_n'] - p['available_n'])
-    } for p in strata_plan if (p['target_n'] - p['available_n']) > 0]
+    coletas_necessarias = [{'Região': p['combo'][0], 'Faixa de Renda': p['combo'][1], 'Localidade': p['combo'][2], 'Coletas Faltantes': math.ceil(p['target_n'] - p['available_n'])} for p in strata_plan if (p['target_n'] - p['available_n']) > 0]
+
     if coletas_necessarias:
         plano_coleta_df = pd.DataFrame(coletas_necessarias)
-        total_coletas_necessarias = plano_coleta_df['Coletas Faltantes'].sum()
+        total_geral_faltante = plano_coleta_df['Coletas Faltantes'].sum()
 
-        st.markdown(
-            "Para atingir a amostra ideal, seria necessário focar a coleta nos seguintes pontos. Use a matriz para encontrar as melhores combinações de esforço."
-        )
+        st.metric(label="Total Geral de Coletas Adicionais Necessárias", value=f"{total_geral_faltante:.0f}")
+        st.markdown("Use as abas abaixo para analisar onde os esforços de coleta são mais necessários.")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("###### Por Região")
-            st.dataframe(
-                plano_coleta_df.groupby('Região')
-                ['Coletas Faltantes'].sum().sort_values(ascending=False))
-        with col2:
-            st.markdown("###### Por Faixa de Renda")
-            st.dataframe(
-                plano_coleta_df.groupby('Faixa de Renda')
-                ['Coletas Faltantes'].sum().sort_values(ascending=False))
+        # Cria as abas para cada localidade + visão geral
+        tab_capital, tab_interior, tab_geral = st.tabs(["🎯 Prioridades na Capital", "🎯 Prioridades no Interior", "Visão Geral Consolidada"])
 
-        st.markdown("##### Matriz de Prioridades (Região vs. Renda)")
-        matriz_prioridade = pd.pivot_table(plano_coleta_df,
-                                           values='Coletas Faltantes',
-                                           index='Faixa de Renda',
-                                           columns='Região',
-                                           aggfunc='sum',
-                                           fill_value=0)
-        st.dataframe(matriz_prioridade.style.background_gradient(
-            cmap='Reds').format("{:.0f}"),
-                     use_container_width=True)
+        with tab_capital:
+            df_capital = plano_coleta_df[plano_coleta_df['Localidade'] == 'Capital']
+            if not df_capital.empty:
+                total_capital = df_capital['Coletas Faltantes'].sum()
+                st.info(f"Total de coletas faltantes em Capitais: **{total_capital:.0f}**")
 
-        # --- NOVO: Total de coletas necessárias ---
-        st.metric(
-            label=
-            "Total de Coletas Adicionais Necessárias para a Amostra Ideal",
-            value=f"{total_coletas_necessarias:.0f}")
+                matriz_capital = pd.pivot_table(df_capital, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
+                st.dataframe(matriz_capital.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
+            else:
+                st.success("Nenhuma coleta adicional necessária nas capitais para este plano.")
 
+        with tab_interior:
+            df_interior = plano_coleta_df[plano_coleta_df['Localidade'] == 'Interior']
+            if not df_interior.empty:
+                total_interior = df_interior['Coletas Faltantes'].sum()
+                st.info(f"Total de coletas faltantes no Interior: **{total_interior:.0f}**")
+
+                matriz_interior = pd.pivot_table(df_interior, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
+                st.dataframe(matriz_interior.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
+            else:
+                st.success("Nenhuma coleta adicional necessária no interior para este plano.")
+
+        with tab_geral:
+            st.markdown("Resumos e Matriz consolidada (Capital + Interior).")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("###### Por Região")
+                st.dataframe(plano_coleta_df.groupby('Região')['Coletas Faltantes'].sum().sort_values(ascending=False))
+            with col2:
+                st.markdown("###### Por Faixa de Renda")
+                st.dataframe(plano_coleta_df.groupby('Faixa de Renda')['Coletas Faltantes'].sum().sort_values(ascending=False))
+
+            st.markdown("###### Matriz de Prioridades Consolidada")
+            matriz_prioridade = pd.pivot_table(plano_coleta_df, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
+            st.dataframe(matriz_prioridade.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
     else:
-        st.markdown(
-            "A base de dados atual já possui todos os perfis necessários para o plano ideal."
-        )
+        st.success("🎉 Plano de Coleta Concluído! A base de dados atual já possui todos os perfis necessários para a amostra ideal.")
+
 
     # --- O restante do código (expanders de Perfil e Download) continua o mesmo ---
     with st.expander("Ver Perfil e Auditoria da Amostra Gerada"):

@@ -1,0 +1,50 @@
+{
+  "versoes": [
+    {
+      "id_versao": "regras_2025_T1",
+      "data_fim_validade": "2025-07-06",
+      "regras": [
+        { "classe_agregada": "E", "classe_detalhada": "E", "min_renda": 0, "max_renda": 1412 },
+        { "classe_agregada": "D", "classe_detalhada": "D", "min_renda": 1413, "max_renda": 1525 },
+        { "classe_agregada": "C2", "classe_detalhada": "C2", "min_renda": 1526, "max_renda": 2713 },
+        { "classe_agregada": "C1", "classe_detalhada": "C1", "min_renda": 2714, "max_renda": 4607 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.2", "min_renda": 4608, "max_renda": 5786 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.1", "min_renda": 5787, "max_renda": 8150 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.3", "min_renda": 8151, "max_renda": 11163 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.2", "min_renda": 11164, "max_renda": 13172 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.1", "min_renda": 13173, "max_renda": 16186 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.4", "min_renda": 16187, "max_renda": 18500 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.3", "min_renda": 18501, "max_renda": 21046 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.2", "min_renda": 21047, "max_renda": 24500 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.1", "min_renda": 24501, "max_renda": 28096 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.4", "min_renda": 28097, "max_renda": 29643 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.3", "min_renda": 29644, "max_renda": 34261 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.2", "min_renda": 34262, "max_renda": 40092 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.1", "min_renda": 40093, "max_renda": 9999999 }
+      ]
+    },
+    {
+      "id_versao": "regras_2025_T2",
+      "data_inicio_validade": "2025-07-07",
+      "regras": [
+        { "classe_agregada": "E", "classe_detalhada": "E", "min_renda": 0, "max_renda": 1518 },
+        { "classe_agregada": "D", "classe_detalhada": "D", "min_renda": 1519, "max_renda": 1745 },
+        { "classe_agregada": "C2", "classe_detalhada": "C2", "min_renda": 1746, "max_renda": 3191 },
+        { "classe_agregada": "C1", "classe_detalhada": "C1", "min_renda": 3192, "max_renda": 5499 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.2", "min_renda": 5500, "max_renda": 6947 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.1", "min_renda": 6948, "max_renda": 9850 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.3", "min_renda": 9851, "max_renda": 13561 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.2", "min_renda": 13562, "max_renda": 16035 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.1", "min_renda": 16036, "max_renda": 19747 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.4", "min_renda": 19748, "max_renda": 22747 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.3", "min_renda": 22748, "max_renda": 25710 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.2", "min_renda": 25711, "max_renda": 30000 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.1", "min_renda": 30001, "max_renda": 34360 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.4", "min_renda": 34361, "max_renda": 35087 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.3", "min_renda": 35088, "max_renda": 37258 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.2", "min_renda": 37259, "max_renda": 40000 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.1", "min_renda": 40001, "max_renda": 9999999 }
+      ]
+    }
+  ]
+}

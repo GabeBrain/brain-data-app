@@ -47,8 +47,9 @@ df_respondents, df_surveys = load_data()
 # --- Botão para Limpar o Cache ---
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Atualizar Dados do Dashboard"):
-    st.cache_data.clear()
-    st.rerun()
+    with st.spinner("Limpando cache e recarregando dados..."):
+        st.cache_data.clear()
+        st.rerun()
 
 # --- Verificação de Dados Mínimos ---
 if df_respondents.empty or 'data_pesquisa' not in df_respondents.columns or df_respondents[

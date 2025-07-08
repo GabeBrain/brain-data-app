@@ -40,36 +40,90 @@ def get_db_connection():
 def init_db_schema() -> bool:
     conn = get_db_connection()
     if conn is None: return False
-
     cursor = conn.cursor()
     try:
+        # Tabela de Metadados das Pesquisas
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS surveys (
                 survey_id SERIAL PRIMARY KEY,
                 research_name TEXT NOT NULL,
                 creation_date DATE NOT NULL,
-                api_link TEXT NOT NULL, -- <<<< Não é UNIQUE devido aos problemas de timeout/DB
+                api_link TEXT NOT NULL UNIQUE,
                 expected_total INTEGER,
-                last_fetched TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                collected_count INTEGER DEFAULT 0,
+                collected_percentage NUMERIC(5, 2) DEFAULT 0.00,
+                last_fetched TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        # Adicionar restrição UNIQUE separadamente, se o DB permitir, para 'research_name'
-        # ou outras colunas que deveriam ser únicas.
-        # Mas por enquanto, se a tabela já existe sem o UNIQUE, não vamos tentar adicionar
-        # com ALTER TABLE para evitar o timeout.
-
+        # Tabela de Dados Brutos dos Respondentes
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS survey_respondent_data (
                 respondent_id TEXT NOT NULL,
-                survey_id INTEGER NOT NULL REFERENCES surveys(survey_id),
+                survey_id INTEGER NOT NULL REFERENCES surveys(survey_id) ON DELETE CASCADE,
                 data_jsonb JSONB NOT NULL,
-                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fetched_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (respondent_id, survey_id)
             );
         """)
+        # Tabela de Log da Consolidação
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS consolidation_log (
+                log_id SERIAL PRIMARY KEY,
+                survey_id INTEGER NOT NULL REFERENCES surveys(survey_id) ON DELETE CASCADE UNIQUE,
+                last_consolidated_at TIMESTAMP WITH TIME ZONE,
+                unique_questions_consolidated INTEGER
+            );
+        """)
+        # Tabela de Dados Consolidados
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS consolidated_data (
+                id SERIAL PRIMARY KEY,
+                respondent_id TEXT NOT NULL,
+                survey_id INTEGER NOT NULL,
+                question_code TEXT NOT NULL,
+                answer_value TEXT,
+                FOREIGN KEY (survey_id) REFERENCES surveys(survey_id) ON DELETE CASCADE,
+                UNIQUE (respondent_id, survey_id, question_code)
+            );
+        """)
+        # Tabela Final para Análise (Formato Largo e Tratado)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS analytics_respondents (
+                respondent_id TEXT NOT NULL,
+                        survey_id INTEGER NOT NULL,
+                        research_name TEXT,
+                        data_pesquisa DATE,
+                        idade_original TEXT,
+                        idade_numerica INTEGER,
+                        geracao TEXT,
+                        faixa_etaria TEXT,
+                        renda_texto_original TEXT,
+                        renda_valor_estimado INTEGER,
+                        renda_faixa_padronizada TEXT, 
+                        renda_macro_faixa TEXT,       
+                        renda_classe_agregada TEXT,     
+                        renda_classe_detalhada TEXT,  
+                        cidade_original TEXT,
+                        localidade TEXT,
+                        estado_original TEXT,
+                        estado_nome TEXT,
+                        regiao TEXT,
+                        intencao_compra_original TEXT,
+                        intencao_compra_padronizada TEXT,
+                        tempo_intencao_original TEXT,
+                        tempo_intencao_padronizado TEXT,
+                        genero TEXT,
+                        latitude NUMERIC(10, 7),
+                        longitude NUMERIC(10, 7),
+                        PRIMARY KEY (respondent_id, survey_id),
+                        FOREIGN KEY (survey_id) REFERENCES surveys(survey_id) ON DELETE CASCADE
+                    );
+                """)
         conn.commit()
         return True
     except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inicializar o schema do banco de dados: {e}")
         raise Exception(f"Erro ao inicializar esquema do DB: {e}")
     finally:
         cursor.close()
