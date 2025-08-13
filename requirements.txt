@@ -6,3 +6,5 @@ psycopg2-binary
 requests
 pydeck
 altair
+folium
+streamlit-folium

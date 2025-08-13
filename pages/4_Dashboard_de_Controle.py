@@ -3,11 +3,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import pydeck as pdk
 import time
-import datetime
 from src.database import get_analytics_data, get_all_surveys
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import HeatMap
 
 # --- Configuração da Página ---
 st.set_page_config(layout="wide", page_title="Dashboard de Controle")
@@ -201,33 +201,22 @@ else:
 # --- NOVO: MAPA DENTRO DE UM EXPANDER ---
 st.markdown("---")
 with st.expander("📍 Ver Densidade Geográfica de Respondentes"):
-    # Verifica se a chave do Mapbox existe nos secrets
-    if "MAPBOX_API_KEY" not in st.secrets:
-        st.error("Chave da API do Mapbox não configurada. Por favor, adicione MAPBOX_API_KEY aos seus secrets.")
+    df_mapa = df_filtrado.dropna(subset=['latitude', 'longitude'])
+    
+    if not df_mapa.empty:
+        with st.spinner('Renderizando mapa de calor...'):
+            # Cria um mapa base centrado no Brasil
+            map_center = [-14.2350, -51.9253]
+            m = folium.Map(location=map_center, zoom_start=4, tiles="cartodbpositron")
+
+            # Prepara os dados para o HeatMap: uma lista de listas [lat, lon]
+            heat_data = df_mapa[['latitude', 'longitude']].values.tolist()
+            
+            # Adiciona a camada de mapa de calor
+            HeatMap(heat_data, radius=15).add_to(m)
+
+            # Renderiza o mapa no Streamlit
+            st_folium(m, use_container_width=True, height=500)
     else:
-        df_mapa = df_filtrado.dropna(subset=['latitude', 'longitude'])
-        if not df_mapa.empty:
-            with st.spinner('Renderizando mapa de calor interativo...'):
-                view_state = pdk.ViewState(
-                    latitude=df_mapa['latitude'].mean(),
-                    longitude=df_mapa['longitude'].mean(),
-                    zoom=3.5,
-                    pitch=50
-                )
-                layer = pdk.Layer(
-                    'HeatmapLayer',
-                    data=df_mapa,
-                    get_position='[longitude, latitude]',
-                    opacity=0.9,
-                    get_weight=1
-                )
-                # Adiciona a chave da API na chamada do Deck
-                st.pydeck_chart(pdk.Deck(
-                    mapbox_key=st.secrets["MAPBOX_API_KEY"],
-                    map_style='mapbox://styles/mapbox/light-v9',
-                    initial_view_state=view_state,
-                    layers=[layer],
-                    tooltip={"text": "Localização do Respondente"}
-                ))
-        else:
-            st.info("Nenhum dado de geolocalização disponível para a seleção atual.")
+        st.info("Nenhum dado de geolocalização disponível para a seleção atual.")
+
