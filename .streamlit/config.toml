@@ -19,5 +19,6 @@ font="sans serif"
 
 [server]
 headless = true
-address = "0.0.0.0"
-port = 5000
+# NÃO defina server.port nem server.address na Cloud
+enableCORS = false
+enableXsrfProtection = false
