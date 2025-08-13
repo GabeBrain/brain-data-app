@@ -165,64 +165,69 @@ time.sleep(0.3)
 progress_bar.empty()
 
 # --- 5. Renderização dos Componentes do Dashboard ---
-# (Esta seção permanece a mesma)
 with placeholder_kpis.container():
     col1, col2, col3 = st.columns(3)
     col1.metric("Total de Pesquisas na Seleção", f"{total_pesquisas}")
     col2.metric("Total de Coletas no Período", f"{total_coletas:,}")
     col3.metric("Média Ponderada de Coleta (%)", f"{media_pct_coleta:.2f}%")
     st.markdown("---")
-with placeholder_mapa.container():
-    st.subheader("📍 Densidade Geográfica de Respondentes no Período")
-    with st.spinner(
-            'Renderizando mapa de calor interativo... Por favor, aguarde.'):
-        if not df_mapa.empty:
-            view_state = pdk.ViewState(latitude=df_mapa['latitude'].mean(),
-                                       longitude=df_mapa['longitude'].mean(),
-                                       zoom=3.5,
-                                       pitch=50)
-            layer = pdk.Layer('HeatmapLayer',
-                              data=df_mapa,
-                              get_position='[longitude, latitude]',
-                              opacity=0.9,
-                              get_weight=1)
-            st.pydeck_chart(
-                pdk.Deck(map_style='mapbox://styles/mapbox/light-v9',
-                         initial_view_state=view_state,
-                         layers=[layer]))
-        else:
-            st.info(
-                "Nenhum dado de geolocalização disponível para a seleção atual."
-            )
-            time.sleep(1)
-with placeholder_timeline.container():
-    st.markdown("---")
-    st.subheader("📅 Coletas Realizadas ao Longo do Tempo no Período")
+
+# Linha do Tempo de Coletas
+st.subheader("📅 Coletas Realizadas ao Longo do Tempo no Período")
+if not df_filtrado.empty:
+    contagem_diaria = df_filtrado.resample('D', on='data_pesquisa').size().reset_index(name='contagem')
+    contagem_diaria = contagem_diaria[contagem_diaria['contagem'] > 0]
     if not contagem_diaria.empty:
         st.bar_chart(contagem_diaria.set_index('data_pesquisa'))
     else:
         st.info("Nenhuma coleta encontrada para a seleção atual.")
+else:
+    st.info("Nenhuma coleta encontrada para a seleção atual.")
 
-# --- 6. Detalhamento de Status das Pesquisas ---
+
+# Detalhamento das Pesquisas (Tabela)
 st.markdown("---")
 st.header("Detalhamento das Pesquisas na Seleção")
-
 if not df_surveys_filtrado.empty:
-    colunas_para_exibir = [
-        'research_name', 'collected_count', 'expected_total',
-        'collected_percentage', 'status'
-    ]
-    st.dataframe(df_surveys_filtrado[colunas_para_exibir],
-                 use_container_width=True,
-                 hide_index=True,
-                 column_config={
-                     "collected_percentage":
-                     st.column_config.ProgressColumn(
-                         "Percentual Coletado",
-                         format="%.2f%%",
-                         min_value=0,
-                         max_value=100,
-                     )
-                 })
+    colunas_para_exibir = ['research_name', 'collected_count', 'expected_total', 'collected_percentage', 'status']
+    st.dataframe(df_surveys_filtrado[colunas_para_exibir], use_container_width=True, hide_index=True,
+                 column_config={"collected_percentage": st.column_config.ProgressColumn(
+                     "Percentual Coletado", format="%.2f%%", min_value=0, max_value=100,
+                 )})
 else:
     st.info("Nenhuma pesquisa encontrada para os filtros selecionados.")
+
+
+# --- NOVO: MAPA DENTRO DE UM EXPANDER ---
+st.markdown("---")
+with st.expander("📍 Ver Densidade Geográfica de Respondentes"):
+    # Verifica se a chave do Mapbox existe nos secrets
+    if "MAPBOX_API_KEY" not in st.secrets:
+        st.error("Chave da API do Mapbox não configurada. Por favor, adicione MAPBOX_API_KEY aos seus secrets.")
+    else:
+        df_mapa = df_filtrado.dropna(subset=['latitude', 'longitude'])
+        if not df_mapa.empty:
+            with st.spinner('Renderizando mapa de calor interativo...'):
+                view_state = pdk.ViewState(
+                    latitude=df_mapa['latitude'].mean(),
+                    longitude=df_mapa['longitude'].mean(),
+                    zoom=3.5,
+                    pitch=50
+                )
+                layer = pdk.Layer(
+                    'HeatmapLayer',
+                    data=df_mapa,
+                    get_position='[longitude, latitude]',
+                    opacity=0.9,
+                    get_weight=1
+                )
+                # Adiciona a chave da API na chamada do Deck
+                st.pydeck_chart(pdk.Deck(
+                    mapbox_key=st.secrets["MAPBOX_API_KEY"],
+                    map_style='mapbox://styles/mapbox/light-v9',
+                    initial_view_state=view_state,
+                    layers=[layer],
+                    tooltip={"text": "Localização do Respondente"}
+                ))
+        else:
+            st.info("Nenhum dado de geolocalização disponível para a seleção atual.")
