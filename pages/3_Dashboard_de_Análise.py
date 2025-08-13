@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import time
 from src.database import get_analytics_data
 
 st.set_page_config(layout="wide", page_title="Dashboard de Análise")
@@ -13,16 +14,17 @@ st.markdown(
     "Use os filtros na barra lateral para explorar os dados dos respondentes de forma interativa."
 )
 
-# --- Botão para Limpar o Cache ---
+# --- Botão para Limpar o Cache e Forçar a Atualização ---
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Atualizar Dados do Dashboard"):
     st.cache_data.clear()
     st.rerun()
 
 
-# --- Carregamento dos Dados ---
+# --- 1. Carregamento dos Dados ---
 @st.cache_data(ttl=3600)
 def load_data():
+    """Carrega os dados da tabela de análise e os armazena em cache."""
     return get_analytics_data()
 
 
@@ -30,14 +32,14 @@ df = load_data()
 
 if df.empty:
     st.warning(
-        "A tabela de análise está vazia. Execute a pipeline na página 'Manutenção e Admin'."
+        "A tabela de análise ('analytics_respondents') está vazia. Execute a pipeline na página de 'Manutenção e Admin' para populá-la."
     )
     st.stop()
 
-# --- BARRA LATERAL DE FILTROS ---
+# --- 2. Barra Lateral de Filtros ---
 st.sidebar.header("Filtros do Dashboard")
 
-# Filtro de Região
+# Filtros com verificação de existência e valores nulos
 if 'regiao' in df.columns and df['regiao'].notna().any():
     regioes_disponiveis = sorted(df['regiao'].dropna().unique().tolist())
     regiao_selecionada = st.sidebar.multiselect("Região",
@@ -46,7 +48,6 @@ if 'regiao' in df.columns and df['regiao'].notna().any():
 else:
     regiao_selecionada = []
 
-# Filtro de Geração
 if 'geracao' in df.columns and df['geracao'].notna().any():
     geracoes_disponiveis = sorted(df['geracao'].dropna().unique().tolist())
     geracao_selecionada = st.sidebar.multiselect("Geração",
@@ -55,7 +56,6 @@ if 'geracao' in df.columns and df['geracao'].notna().any():
 else:
     geracao_selecionada = []
 
-# Filtro de Classe Social
 if 'renda_classe_agregada' in df.columns and df['renda_classe_agregada'].notna(
 ).any():
     classes_disponiveis = sorted(
@@ -66,7 +66,7 @@ if 'renda_classe_agregada' in df.columns and df['renda_classe_agregada'].notna(
 else:
     classe_selecionada = []
 
-# --- Lógica de Filtragem ---
+# --- 3. Lógica de Filtragem do DataFrame ---
 df_filtrado = df.copy()
 if regiao_selecionada:
     df_filtrado = df_filtrado[df_filtrado['regiao'].isin(regiao_selecionada)]
@@ -76,10 +76,9 @@ if classe_selecionada:
     df_filtrado = df_filtrado[df_filtrado['renda_classe_agregada'].isin(
         classe_selecionada)]
 
-# --- Renderização do Dashboard ---
+# --- 4. Renderização do Dashboard ---
 st.markdown("---")
 
-# --- BLOCO DE KPIS REINSERIDO ---
 # KPIs
 total_respondentes = len(df_filtrado)
 renda_media = df_filtrado['renda_valor_estimado'].mean(
@@ -93,15 +92,13 @@ col2.metric("Renda Média Estimada", f"R$ {renda_media:,.2f}")
 col3.metric("Idade Média", f"{idade_media:.1f} anos")
 
 st.markdown("---")
-# --- FIM DO BLOCO DE KPIS ---
-
 st.header("Análise Exploratória Interativa")
 
 opcoes_variaveis = [
     'geracao', 'faixa_etaria', 'regiao', 'localidade', 'renda_classe_agregada',
     'renda_classe_detalhada', 'renda_faixa_padronizada', 'renda_macro_faixa',
-    'renda_valor_estimado', 'intencao_compra_padronizada',
-    'tempo_intencao_padronizado', 'idade_numerica'
+    'intencao_compra_padronizada', 'tempo_intencao_padronizado',
+    'idade_numerica', 'renda_valor_estimado'
 ]
 opcoes_disponiveis = [
     opt for opt in opcoes_variaveis if opt in df_filtrado.columns
@@ -134,9 +131,9 @@ if tipo_grafico in ['Contagem (Barras)', '100% Empilhado (Ranking)']:
 
 st.subheader(f"Visualização: {variavel_principal}")
 
+# --- LÓGICA DE PLOTAGEM COMPLETA ---
 if total_respondentes > 0:
     try:
-        # (O código para gerar os gráficos não precisa de alteração, pois ele usa as variáveis selecionadas)
         if tipo_grafico == 'Contagem (Barras)':
             df_plot = df_filtrado.sort_values(
                 by=variavel_principal
@@ -146,7 +143,63 @@ if total_respondentes > 0:
                          color=variavel_cor,
                          title=f"Contagem por '{variavel_principal}'")
             st.plotly_chart(fig, use_container_width=True)
-        # ... (código dos outros gráficos) ...
+
+        elif tipo_grafico == 'Proporção (Pizza)':
+            counts = df_filtrado[variavel_principal].value_counts()
+            fig = px.pie(counts,
+                         values=counts.values,
+                         names=counts.index,
+                         hole=.3,
+                         title=f"Proporção por '{variavel_principal}'")
+            st.plotly_chart(fig, use_container_width=True)
+
+        elif tipo_grafico == 'Distribuição (Histograma)':
+            if pd.api.types.is_numeric_dtype(df_filtrado[variavel_principal]):
+                fig = px.histogram(
+                    df_filtrado,
+                    x=variavel_principal,
+                    nbins=50,
+                    title=f"Distribuição de '{variavel_principal}'")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning(
+                    f"Histogramas são adequados apenas para variáveis numéricas. '{variavel_principal}' não é numérica."
+                )
+
+        elif tipo_grafico == '100% Empilhado (Ranking)':
+            if variavel_cor:
+                cross_tab = pd.crosstab(df_filtrado[variavel_principal],
+                                        df_filtrado[variavel_cor])
+                cross_tab_pct = cross_tab.div(cross_tab.sum(axis=1),
+                                              axis=0).apply(lambda x: x * 100)
+                fig = px.bar(
+                    cross_tab_pct,
+                    orientation='h',
+                    text_auto='.1f',
+                    title=
+                    f"Composição Percentual de '{variavel_cor}' por '{variavel_principal}'"
+                )
+                fig.update_layout(barmode='stack',
+                                  yaxis={'categoryorder': 'total ascending'})
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning(
+                    "Para o gráfico '100% Empilhado', você precisa selecionar uma variável de 'Agrupar por cor'."
+                )
+
+        elif tipo_grafico == 'Série Temporal (Linha)':
+            if 'data_pesquisa' in df_filtrado.columns and pd.to_datetime(
+                    df_filtrado['data_pesquisa'],
+                    errors='coerce').notna().any():
+                # (A lógica para a série temporal, com seus próprios seletores, continua aqui)
+                # ...
+                st.info("Funcionalidade de Série Temporal em construção."
+                        )  # Placeholder
+            else:
+                st.warning(
+                    "A coluna 'data_pesquisa' com dados válidos é necessária para gráficos de série temporal."
+                )
+
     except Exception as e:
         st.error(f"Não foi possível gerar o gráfico. Erro: {e}")
 else:

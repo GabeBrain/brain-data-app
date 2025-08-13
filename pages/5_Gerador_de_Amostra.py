@@ -81,11 +81,11 @@ with st.container(border=True):
     with col_p1:
         st.write("**Região**")
         regiao_pesos = {
-            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 40, 5),
-            'Nordeste': st.slider("Nordeste (%)", 0, 100, 25, 5),
-            'Sul': st.slider("Sul (%)", 0, 100, 20, 5),
+            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 35, 5),
+            'Nordeste': st.slider("Nordeste (%)", 0, 100, 30, 5),
+            'Sul': st.slider("Sul (%)", 0, 100, 25, 5),
             'Centro-Oeste': st.slider("Centro-Oeste (%)", 0, 100, 10, 5),
-            'Norte': st.slider("Norte (%)", 0, 100, 5, 5)
+            'Norte': st.slider("Norte (%)", 0, 100, 0, 5)
         }
         soma_regiao = sum(regiao_pesos.values())
         if soma_regiao == 100: st.success(f"Total Região: {soma_regiao}%")
@@ -126,8 +126,8 @@ with st.container(border=True):
 
     if st.button("🔍 Analisar Viabilidade e Gerar Amostras",
                  disabled=not parametros_validos):
-        # (A lógica de geração das amostras dentro do botão continua a mesma)
-        with st.spinner("Analisando e gerando amostras..."):
+        with st.spinner("Analisando e gerando amostra hierárquica..."):
+            # Etapa 1: Filtragem Inicial (sem alterações)
             df_base_filtrada = pd.DataFrame()
             if start_date and end_date:
                 df_base_filtrada = df_analytics[
@@ -135,10 +135,12 @@ with st.container(border=True):
                     & (df_analytics['data_pesquisa'].dt.date <= end_date) &
                     (df_analytics['idade_numerica'] >= idade_range[0]) &
                     (df_analytics['idade_numerica'] <= idade_range[1])].copy()
+
             if df_base_filtrada.empty:
                 st.warning("Nenhum dado encontrado para os filtros de base.")
                 st.session_state.analysis_report = None
             else:
+                # Etapa 2: Análise de Viabilidade (continua a mesma para gerar o relatório)
                 analysis_results = []
                 for param_name, (col_name, weights) in {
                         'Região': ('regiao', regiao_pesos),
@@ -157,7 +159,85 @@ with st.container(border=True):
                             "N Disponível": available_n
                         })
                 report_df = pd.DataFrame(analysis_results)
+
+                # --- NOVA LÓGICA DE AMOSTRAGEM HIERÁRQUICA ---
                 n_solicitado = min(sample_size, len(df_base_filtrada))
+
+                # ESTÁGIO 1: Garantir as cotas de RENDA primeiro
+                indices_por_renda = set()
+                df_restante = df_base_filtrada.copy()
+
+                for renda, pct in renda_faixas_macro.items():
+                    if pct > 0:
+                        target_n_renda = int(
+                            round(n_solicitado * (pct / 100.0)))
+                        disponiveis_na_faixa = df_restante[
+                            df_restante['renda_macro_faixa'] == renda]
+
+                        n_a_pegar = min(target_n_renda,
+                                        len(disponiveis_na_faixa))
+
+                        if n_a_pegar > 0:
+                            # Dentro da faixa de renda, tentamos balancear por Região e Localidade
+                            sub_amostra_indices = set()
+                            for regiao, pct_regiao in regiao_pesos.items():
+                                for local, pct_local in localidade_pesos.items(
+                                ):
+                                    sub_target_n = int(
+                                        round(n_a_pegar * (pct_regiao / 100) *
+                                              (pct_local / 100)))
+
+                                    sub_disponiveis = disponiveis_na_faixa[
+                                        (disponiveis_na_faixa['regiao'] ==
+                                         regiao)
+                                        & (disponiveis_na_faixa['localidade']
+                                           == local)]
+
+                                    sub_take_n = min(sub_target_n,
+                                                     len(sub_disponiveis))
+                                    if sub_take_n > 0:
+                                        selecionados = np.random.choice(
+                                            sub_disponiveis.index,
+                                            sub_take_n,
+                                            replace=False)
+                                        sub_amostra_indices.update(
+                                            selecionados)
+
+                            # Preenche o restante para a cota de renda aleatoriamente dentro da faixa
+                            sub_shortfall = n_a_pegar - len(
+                                sub_amostra_indices)
+                            if sub_shortfall > 0:
+                                sub_restantes = disponiveis_na_faixa.index.difference(
+                                    sub_amostra_indices)
+                                n_to_fill_sub = min(sub_shortfall,
+                                                    len(sub_restantes))
+                                if n_to_fill_sub > 0:
+                                    sub_amostra_indices.update(
+                                        np.random.choice(sub_restantes,
+                                                         n_to_fill_sub,
+                                                         replace=False))
+
+                            indices_por_renda.update(sub_amostra_indices)
+                            df_restante = df_restante.drop(
+                                sub_amostra_indices
+                            )  # Remove os já selecionados
+
+                # ESTÁGIO 2: Preencher o shortfall GERAL
+                shortfall_geral = n_solicitado - len(indices_por_renda)
+                if shortfall_geral > 0:
+                    # O df_restante agora contém todos os respondentes não selecionados
+                    n_to_fill_geral = min(shortfall_geral, len(df_restante))
+                    if n_to_fill_geral > 0:
+                        indices_por_renda.update(
+                            np.random.choice(df_restante.index,
+                                             n_to_fill_geral,
+                                             replace=False))
+
+                # Cria a amostra final (Amostra com N Solicitado)
+                amostra_final_df = df_base_filtrada.loc[list(
+                    indices_por_renda)].copy()
+
+                # A lógica da Amostra Proporcional Ideal (a segunda amostra) não muda
                 strata_combinations = list(
                     itertools.product(regiao_pesos.keys(),
                                       renda_faixas_macro.keys(),
@@ -184,29 +264,6 @@ with st.container(border=True):
                         "mask":
                         mask
                     })
-                sampled_indices_forced = set()
-                for plan in strata_plan:
-                    if plan['target_n'] > 0:
-                        take_n = min(int(round(plan['target_n'])),
-                                     plan['available_n'])
-                        if take_n > 0:
-                            sampled_indices_forced.update(
-                                np.random.choice(
-                                    df_base_filtrada[plan['mask']].index,
-                                    take_n,
-                                    replace=False))
-                shortfall = n_solicitado - len(sampled_indices_forced)
-                if shortfall > 0:
-                    remaining_indices = df_base_filtrada.index.difference(
-                        sampled_indices_forced)
-                    n_to_fill = min(shortfall, len(remaining_indices))
-                    if n_to_fill > 0:
-                        sampled_indices_forced.update(
-                            np.random.choice(remaining_indices,
-                                             n_to_fill,
-                                             replace=False))
-                amostra_final_df = df_base_filtrada.loc[list(
-                    sampled_indices_forced)].copy()
                 min_ratio = min(
                     [s['ratio']
                      for s in strata_plan if s['target_n'] > 0] + [1.0])
@@ -219,6 +276,8 @@ with st.container(border=True):
                                 n=n_to_sample, random_state=42).index.tolist())
                 amostra_proporcional_df = df_base_filtrada.loc[
                     sampled_indices_prop].copy()
+
+                # Salva os resultados no estado da sessão
                 st.session_state.analysis_report = {
                     "amostra_df": amostra_final_df,
                     "amostra_proporcional_df": amostra_proporcional_df,
@@ -294,56 +353,107 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
 
     # --- PAINEL DE AÇÃO PARA COLETA (COM TOTAL) ---
     st.subheader("Painel de Ação para Coleta")
-    coletas_necessarias = [{'Região': p['combo'][0], 'Faixa de Renda': p['combo'][1], 'Localidade': p['combo'][2], 'Coletas Faltantes': math.ceil(p['target_n'] - p['available_n'])} for p in strata_plan if (p['target_n'] - p['available_n']) > 0]
+    coletas_necessarias = [{
+        'Região':
+        p['combo'][0],
+        'Faixa de Renda':
+        p['combo'][1],
+        'Localidade':
+        p['combo'][2],
+        'Coletas Faltantes':
+        math.ceil(p['target_n'] - p['available_n'])
+    } for p in strata_plan if (p['target_n'] - p['available_n']) > 0]
 
     if coletas_necessarias:
         plano_coleta_df = pd.DataFrame(coletas_necessarias)
         total_geral_faltante = plano_coleta_df['Coletas Faltantes'].sum()
 
-        st.metric(label="Total Geral de Coletas Adicionais Necessárias", value=f"{total_geral_faltante:.0f}")
-        st.markdown("Use as abas abaixo para analisar onde os esforços de coleta são mais necessários.")
+        st.metric(label="Total Geral de Coletas Adicionais Necessárias",
+                  value=f"{total_geral_faltante:.0f}")
+        st.markdown(
+            "Use as abas abaixo para analisar onde os esforços de coleta são mais necessários."
+        )
 
         # Cria as abas para cada localidade + visão geral
-        tab_capital, tab_interior, tab_geral = st.tabs(["🎯 Prioridades na Capital", "🎯 Prioridades no Interior", "Visão Geral Consolidada"])
+        tab_capital, tab_interior, tab_geral = st.tabs([
+            "🎯 Prioridades na Capital", "🎯 Prioridades no Interior",
+            "Visão Geral Consolidada"
+        ])
 
         with tab_capital:
-            df_capital = plano_coleta_df[plano_coleta_df['Localidade'] == 'Capital']
+            df_capital = plano_coleta_df[plano_coleta_df['Localidade'] ==
+                                         'Capital']
             if not df_capital.empty:
                 total_capital = df_capital['Coletas Faltantes'].sum()
-                st.info(f"Total de coletas faltantes em Capitais: **{total_capital:.0f}**")
+                st.info(
+                    f"Total de coletas faltantes em Capitais: **{total_capital:.0f}**"
+                )
 
-                matriz_capital = pd.pivot_table(df_capital, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
-                st.dataframe(matriz_capital.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
+                matriz_capital = pd.pivot_table(df_capital,
+                                                values='Coletas Faltantes',
+                                                index='Faixa de Renda',
+                                                columns='Região',
+                                                aggfunc='sum',
+                                                fill_value=0)
+                st.dataframe(matriz_capital.style.background_gradient(
+                    cmap='Reds').format("{:.0f}"),
+                             use_container_width=True)
             else:
-                st.success("Nenhuma coleta adicional necessária nas capitais para este plano.")
+                st.success(
+                    "Nenhuma coleta adicional necessária nas capitais para este plano."
+                )
 
         with tab_interior:
-            df_interior = plano_coleta_df[plano_coleta_df['Localidade'] == 'Interior']
+            df_interior = plano_coleta_df[plano_coleta_df['Localidade'] ==
+                                          'Interior']
             if not df_interior.empty:
                 total_interior = df_interior['Coletas Faltantes'].sum()
-                st.info(f"Total de coletas faltantes no Interior: **{total_interior:.0f}**")
+                st.info(
+                    f"Total de coletas faltantes no Interior: **{total_interior:.0f}**"
+                )
 
-                matriz_interior = pd.pivot_table(df_interior, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
-                st.dataframe(matriz_interior.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
+                matriz_interior = pd.pivot_table(df_interior,
+                                                 values='Coletas Faltantes',
+                                                 index='Faixa de Renda',
+                                                 columns='Região',
+                                                 aggfunc='sum',
+                                                 fill_value=0)
+                st.dataframe(matriz_interior.style.background_gradient(
+                    cmap='Reds').format("{:.0f}"),
+                             use_container_width=True)
             else:
-                st.success("Nenhuma coleta adicional necessária no interior para este plano.")
+                st.success(
+                    "Nenhuma coleta adicional necessária no interior para este plano."
+                )
 
         with tab_geral:
             st.markdown("Resumos e Matriz consolidada (Capital + Interior).")
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("###### Por Região")
-                st.dataframe(plano_coleta_df.groupby('Região')['Coletas Faltantes'].sum().sort_values(ascending=False))
+                st.dataframe(
+                    plano_coleta_df.groupby('Região')
+                    ['Coletas Faltantes'].sum().sort_values(ascending=False))
             with col2:
                 st.markdown("###### Por Faixa de Renda")
-                st.dataframe(plano_coleta_df.groupby('Faixa de Renda')['Coletas Faltantes'].sum().sort_values(ascending=False))
+                st.dataframe(
+                    plano_coleta_df.groupby('Faixa de Renda')
+                    ['Coletas Faltantes'].sum().sort_values(ascending=False))
 
             st.markdown("###### Matriz de Prioridades Consolidada")
-            matriz_prioridade = pd.pivot_table(plano_coleta_df, values='Coletas Faltantes', index='Faixa de Renda', columns='Região', aggfunc='sum', fill_value=0)
-            st.dataframe(matriz_prioridade.style.background_gradient(cmap='Reds').format("{:.0f}"), use_container_width=True)
+            matriz_prioridade = pd.pivot_table(plano_coleta_df,
+                                               values='Coletas Faltantes',
+                                               index='Faixa de Renda',
+                                               columns='Região',
+                                               aggfunc='sum',
+                                               fill_value=0)
+            st.dataframe(matriz_prioridade.style.background_gradient(
+                cmap='Reds').format("{:.0f}"),
+                         use_container_width=True)
     else:
-        st.success("🎉 Plano de Coleta Concluído! A base de dados atual já possui todos os perfis necessários para a amostra ideal.")
-
+        st.success(
+            "🎉 Plano de Coleta Concluído! A base de dados atual já possui todos os perfis necessários para a amostra ideal."
+        )
 
     # --- O restante do código (expanders de Perfil e Download) continua o mesmo ---
     with st.expander("Ver Perfil e Auditoria da Amostra Gerada"):

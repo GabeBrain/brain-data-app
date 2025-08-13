@@ -64,7 +64,7 @@ perguntas_alvo_codigos = {
         "ICE32P365_M2"
     ],
     "IC4P34_1": [
-        "I4.1", "I4.1",
+        "I4.1", "I4.1", "IC4P34_M1",
         "Seu interesse é por qual tipo de imóvel residencial para moradia? Cite até 2 por ordem de preferência. RM e ESTIMULADA_M1",
         "Que tipo de imóvel RESIDENCIAL pretende comprar? 1 (RU e Estimulada)",
         "ICE32P366_M1"
@@ -539,18 +539,10 @@ def classify_income_by_rules(valor, data_criacao_pesquisa, all_rules):
 
 
 def calcular_media_faixa(faixa: str) -> int | None:
-    """
-    Versão mais robusta que filtra números pequenos (provavelmente de alternativas de resposta)
-    antes de calcular a média da faixa.
-    """
-    if not isinstance(faixa, str):
-        return None
-
+    """Calcula o valor numérico médio de uma faixa de renda textual."""
+    if not isinstance(faixa, str): return None
     numeros_encontrados = re.findall(r'[\d\.,]+', faixa)
-
-    if not numeros_encontrados:
-        return None
-
+    if not numeros_encontrados: return None
     numeros_convertidos = []
     for num_str in numeros_encontrados:
         try:
@@ -558,29 +550,14 @@ def calcular_media_faixa(faixa: str) -> int | None:
             numeros_convertidos.append(float(num_limpo))
         except ValueError:
             continue
-
-    # --- LÓGICA DE FILTRO ADICIONADA AQUI ---
-    # Filtra números que são provavelmente alternativas de resposta (ex: menores que 1000)
     numeros_filtrados = [n for n in numeros_convertidos if n >= 1000]
-
-    if not numeros_filtrados:
-        # Se após filtrar não sobrar nenhum número (ex: a resposta era "Não sei"), retorna None
-        return None
-
-    # Calcula a média apenas dos números filtrados e válidos
+    if not numeros_filtrados: return None
     return int(np.mean(numeros_filtrados))
 
 
-def classificar_faixa(faixa: str) -> str | None:
-    """
-    Usa a média calculada para classificar em uma faixa de renda padronizada.
-    """
-    valor = calcular_media_faixa(faixa)
-
-    if valor is None:
-        return None  # Retorna None se não conseguiu calcular o valor
-
-    # A lógica de classificação continua a mesma
+def classificar_faixa_antiga(valor: int | None) -> str | None:
+    """Usa o valor estimado para classificar em uma faixa de renda padronizada (legado)."""
+    if valor is None: return None
     if valor <= 1500: return "01. Até R$ 1,5 mil"
     if 1500 < valor <= 2500: return "02. De R$ 1,5 mil a R$ 2,5 mil"
     if 2500 < valor <= 4500: return "03. De R$ 2,5 mil a R$ 4,5 mil"
@@ -594,6 +571,27 @@ def classificar_faixa(faixa: str) -> str | None:
     if 21000 < valor <= 24500: return "11. De R$ 21 mil a R$ 24,5 mil"
     if 24500 < valor <= 28000: return "12. De R$ 24,5 mil a R$ 28 mil"
     return "13. Acima de R$ 28 mil"
+
+
+def map_renda_to_macro_faixa(faixa_padronizada: str) -> str | None:
+    """Converte a faixa de renda padronizada para uma macro categoria (legado)."""
+    MAPA_RENDA_MACRO = {
+        "01. Até R$ 1,5 mil": "1. Menor que R$ 2,5 mil",
+        "02. De R$ 1,5 mil a R$ 2,5 mil": "1. Menor que R$ 2,5 mil",
+        "03. De R$ 2,5 mil a R$ 4,5 mil": "2. R$ 2,5 a R$ 5 mil",
+        "04. De R$ 4,5 mil a R$ 5,5 mil": "2. R$ 2,5 a R$ 5 mil",
+        "05. De R$ 5,5 mil a R$ 8 mil": "3. R$ 5 a R$ 10 mil",
+        "06. De R$ 8 mil a R$ 11 mil": "3. R$ 5 a R$ 10 mil",
+        "07. De R$ 11 mil a R$ 13 mil": "4. R$ 10 a R$ 20 mil",
+        "08. De R$ 13 mil a R$ 16 mil": "4. R$ 10 a R$ 20 mil",
+        "09. De R$ 16 mil a R$ 18,5 mil": "4. R$ 10 a R$ 20 mil",
+        "10. De R$ 18,5 mil a R$ 21 mil": "4. R$ 10 a R$ 20 mil",
+        "11. De R$ 21 mil a R$ 24,5 mil": "5. Acima de R$ 20 mil",
+        "12. De R$ 24,5 mil a R$ 28 mil": "5. Acima de R$ 20 mil",
+        "13. Acima de R$ 28 mil": "5. Acima de R$ 20 mil"
+    }
+    if not isinstance(faixa_padronizada, str): return None
+    return MAPA_RENDA_MACRO.get(faixa_padronizada)
 
 
 # --- 3. LÓGICA DE LOCALIZAÇÃO ---
@@ -686,31 +684,51 @@ MAPA_INTENCAO_COMPRA = {
 }
 
 MAPA_TEMPO_INTENCAO = {
-    '5. Acima de 24 meses': 'Mais de 2 anos',
-    '2. Em até 12 meses': 'Até 1 ano',
-    '-': None,
-    '4. Em até 24 meses': 'Até 2 anos',
-    '1. Em até 6 meses': 'Até 6 meses',
-    '3. Em até 18 meses': 'Até 1 ano e meio',
-    '4. Em até 24 meses (2 anos)': 'Até 2 anos',
-    '3. Em até 18 meses (1 ano e meio)': 'Até 1 ano e meio',
-    '2. Em até 12 meses (1 ano)': 'Até 1 ano',
-    '5. Acima de 2 anos': 'Mais de 2 anos',
-    '2. Em até 1 ano': 'Até 1 ano',
-    '3. Em até 1 ano e meio': 'Até 1 ano e meio',
-    'Em até 24 meses': 'Até 2 anos',
-    'Acima de 24 meses': 'Mais de 2 anos',
-    'Em até 18 meses': 'Até 1 ano e meio',
-    'Em até 12 meses': 'Até 1 ano',
-    'Em até 6 meses': 'Até 6 meses',
-    '5. Acima de 24 meses (acima de 2 anos)': 'Mais de 2 anos'
+    # Variações para "Até 6 meses"
+    '1. Em até 6 meses': '1. Até 6 meses',
+    'Em até 6 meses': '1. Até 6 meses',
+    '1. Em até 3 meses': '1. Até 6 meses',  # Agrupado em "Até 6 meses"
+    '2. Em até 6 meses': '1. Até 6 meses',
+
+    # Variações para "Até 1 ano"
+    '2. Em até 12 meses': '2. Até 1 ano',
+    '3. Em até 12 meses': '2. Até 1 ano',
+    'Em até 12 meses': '2. Até 1 ano',
+    '2. Em até 1 ano': '2. Até 1 ano',
+    '2. Em até 12 meses (1 ano)': '2. Até 1 ano',
+
+    # Variações para "Até 1 ano e meio"
+    '3. Em até 18 meses': '3. Até 1 ano e meio',
+    'Em até 18 meses': '3. Até 1 ano e meio',
+    '3. Em até 18 meses (1 ano e meio)': '3. Até 1 ano e meio',
+
+    # Variações para "Até 2 anos"
+    '4. Em até 24 meses': '4. Até 2 anos',
+    'Em até 24 meses': '4. Até 2 anos',
+    '4. Em até 24 meses (2 anos)': '4. Até 2 anos',
+
+    # Variações para "Mais de 2 anos"
+    '5. Acima de 12 meses':
+    '5. Mais de 2 anos',  # Assume que 'Acima de 12' já entra na categoria mais longa
+    '5. Acima de 24 meses': '5. Mais de 2 anos',
+    'Acima de 24 meses': '5. Mais de 2 anos',
+    '5. Acima de 2 anos': '5. Mais de 2 anos',
+    '5. Acima de 24 meses (acima de 2 anos)': '5. Mais de 2 anos',
+
+    # Valores a serem ignorados
+    '-': None
 }
 
 
 def padronizar_resposta(resposta, mapa):
-    return mapa.get(
-        resposta, resposta
-    )  # Retorna o valor do mapa ou a própria resposta se não encontrar
+    """
+    Busca um valor em um dicionário de mapeamento.
+    Se não encontrar, retorna None (lógica coringa).
+    """
+    if not isinstance(resposta, str):
+        return None
+    # A mudança chave está aqui: o segundo argumento de .get() agora é None.
+    return mapa.get(resposta, None)
 
 
 def impute_missing_states(df: pd.DataFrame) -> pd.DataFrame:
@@ -801,10 +819,10 @@ def process_and_standardize_data(long_df: pd.DataFrame,
         lambda x: padronizar_resposta(x, MAPA_TEMPO_INTENCAO))
     wide_df['renda_valor_estimado'] = wide_df['FE2P10'].apply(
         calcular_media_faixa)
-    wide_df['renda_faixa_padronizada'] = wide_df['renda_valor_estimado'].apply(classificar_faixa)
-    wide_df['renda_macro_faixa'] = wide_df['renda_faixa_padronizada'].apply(map_renda_to_macro_faixa)
-
-
+    wide_df['renda_faixa_padronizada'] = wide_df['renda_valor_estimado'].apply(
+        classificar_faixa_antiga)
+    wide_df['renda_macro_faixa'] = wide_df['renda_faixa_padronizada'].apply(
+        map_renda_to_macro_faixa)
 
     # Aplica a nova função de classificação que retorna uma tupla
     resultados_renda = wide_df.apply(lambda row: classify_income_by_rules(
@@ -909,10 +927,3 @@ MAPA_RENDA_MACRO = {
     "12. De R$ 24,5 mil a R$ 28 mil": "5. Acima de R$ 20 mil",
     "13. Acima de R$ 28 mil": "5. Acima de R$ 20 mil"
 }
-
-
-def map_renda_to_macro_faixa(faixa_padronizada: str) -> str | None:
-    """Converte a faixa de renda padronizada para uma macro categoria."""
-    if not isinstance(faixa_padronizada, str):
-        return None
-    return MAPA_RENDA_MACRO.get(faixa_padronizada)
