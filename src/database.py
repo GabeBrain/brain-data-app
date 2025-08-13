@@ -25,16 +25,42 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD")
 
 @st.cache_resource
 def get_db_connection():
+    """
+    Estabelece conexão com o banco de dados e inclui um bloco de diagnóstico
+    para verificar se os secrets foram carregados corretamente.
+    """
+    # --- Bloco de Diagnóstico de Secrets ---
+    db_secrets = {
+        "DB_HOST": os.environ.get("DB_HOST"),
+        "DB_PORT": os.environ.get("DB_PORT"),
+        "DB_NAME": os.environ.get("DB_NAME"),
+        "DB_USER": os.environ.get("DB_USER"),
+        "DB_PASSWORD": os.environ.get("DB_PASSWORD")
+    }
+    
+    # Verifica se alguma das chaves tem um valor vazio ou nulo
+    missing_secrets = [key for key, value in db_secrets.items() if not value]
+    
+    if missing_secrets:
+        error_message = f"ERRO CRÍTICO: As seguintes variáveis de ambiente (Secrets) não foram encontradas ou estão vazias: {', '.join(missing_secrets)}. Por favor, verifique a configuração de 'Secrets' no seu painel do Streamlit Cloud."
+        st.error(error_message)
+        raise ConnectionError(error_message)
+    
+    # --- Fim do Bloco de Diagnóstico ---
+
     try:
-        conn = psycopg2.connect(host=DB_HOST,
-                                port=DB_PORT,
-                                database=DB_NAME,
-                                user=DB_USER,
-                                password=DB_PASSWORD)
+        conn = psycopg2.connect(
+            host=db_secrets["DB_HOST"],
+            port=db_secrets["DB_PORT"],
+            database=db_secrets["DB_NAME"],
+            user=db_secrets["DB_USER"],
+            password=db_secrets["DB_PASSWORD"]
+        )
         return conn
     except Exception as e:
-        raise ConnectionError(
-            f"Não foi possível conectar ao banco de dados: {e}")
+        st.error(f"Falha ao conectar ao PostgreSQL após carregar os secrets. Verifique se as credenciais estão corretas e se o banco está acessível. Erro: {e}")
+        raise ConnectionError(f"Não foi possível conectar ao banco de dados: {e}")
+
 
 
 def init_db_schema() -> bool:
