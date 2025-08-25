@@ -41,30 +41,25 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         }
         
-        /* Nível 0 (Padrão, mais baixo) */
-        .task-balloon.level-0 { bottom: 40px; }
-        .task-balloon.level-0::after {
-            content: ''; position: absolute; bottom: -10px; left: 50%;
-            transform: translateX(-50%); border-width: 10px 10px 0 10px;
-            border-style: solid; border-color: white transparent transparent transparent;
+        /* Rabicho e conector aplicados a todos os balões */
+        .task-balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 10px 10px 0 10px;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
         }
-        .task-balloon.level-0 .task-connector {
-             position: absolute; bottom: 20px; left: 50%; width: 2px; height: 20px;
-             background-image: linear-gradient(to bottom, var(--color-light-gray) 50%, transparent 50%);
-             background-size: 2px 8px; z-index: 5;
-        }
-
-        /* Nível 1 (Alternativo, mais alto) */
-        .task-balloon.level-1 { bottom: 160px; }
-        .task-balloon.level-1::after {
-            content: ''; position: absolute; bottom: -10px; left: 50%;
-            transform: translateX(-50%); border-width: 10px 10px 0 10px;
-            border-style: solid; border-color: white transparent transparent transparent;
-        }
-        .task-balloon.level-1 .task-connector {
-             position: absolute; bottom: 20px; left: 50%; width: 2px; height: 140px;
-             background-image: linear-gradient(to bottom, var(--color-light-gray) 50%, transparent 50%);
-             background-size: 2px 8px; z-index: 5;
+        .task-connector {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            width: 2px;
+            background-image: linear-gradient(to bottom, var(--color-light-gray) 50%, transparent 50%);
+            background-size: 2px 8px;
+            z-index: 5;
         }
 
         .task-details {
@@ -170,5 +165,50 @@
                 return acc;
             }, {});
 
-            // 2. Itera sobre os dias que têm tarefas
+            // 2. Ajusta a altura do wrapper conforme o maior número de tarefas por dia
+            const verticalSpacing = 120;       // altura extra por nível
+            const baseOffset = 40;             // altura do primeiro balão
+            const baseHeight = 160;            // altura base do wrapper
+            const maxTasksPerDay = Math.max(...Object.values(tasksByDay).map(t => t.length));
+            timelineWrapper.style.height = `${baseHeight + maxTasksPerDay * verticalSpacing}px`;
+
+            // 3. Itera sobre os dias que têm tarefas
             for (const day in tasksByDay) {
+                const tasks = tasksByDay[day];
+                const dayPosition = (day / totalDays) * 100;
+
+                tasks.forEach((task, index) => {
+                    const balloon = document.createElement('div');
+                    balloon.className = 'task-balloon';
+                    balloon.style.left = `${dayPosition}%`;
+                    const bottomValue = baseOffset + index * verticalSpacing;
+                    balloon.style.bottom = `${bottomValue}px`;
+                    const phaseColor = projectData.phases.find(p => p.name === task.phase)?.color || '#000';
+                    balloon.style.borderTopColor = phaseColor;
+
+                    balloon.innerHTML = `
+                        <div class="font-semibold">${task.name}</div>
+                        <div class="text-sm text-gray-500">Resp.: ${task.responsible}</div>
+                        <div class="task-details mt-2 text-sm text-gray-600">
+                            Início: Dia ${task.start}<br>Fim: Dia ${task.end}
+                        </div>
+                    `;
+
+                    const connector = document.createElement('div');
+                    connector.className = 'task-connector';
+                    connector.style.height = `${bottomValue - 20}px`;
+                    balloon.appendChild(connector);
+
+                    balloon.addEventListener('click', () => {
+                        const details = balloon.querySelector('.task-details');
+                        details.classList.toggle('expanded');
+                    });
+
+                    tasksContainer.appendChild(balloon);
+                });
+            }
+
+        });
+    </script>
+</body>
+</html>
