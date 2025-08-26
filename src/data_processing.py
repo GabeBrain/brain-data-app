@@ -796,7 +796,6 @@ def process_and_standardize_data(long_df: pd.DataFrame,
     future_dates_mask = wide_df['data_pesquisa'] > hoje
     if future_dates_mask.any():
         wide_df.loc[future_dates_mask, 'data_pesquisa'] = pd.NaT
-    wide_df['data_pesquisa'] = wide_df['data_pesquisa'].dt.date
 
     wide_df = impute_missing_states(wide_df)
 

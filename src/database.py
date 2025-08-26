@@ -118,7 +118,7 @@ def init_db_schema() -> bool:
                 respondent_id TEXT NOT NULL,
                         survey_id INTEGER NOT NULL,
                         research_name TEXT,
-                        data_pesquisa DATE,
+                        data_pesquisa TIMESTAMP,
                         idade_original TEXT,
                         idade_numerica INTEGER,
                         geracao TEXT,
