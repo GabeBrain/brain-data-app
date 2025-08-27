@@ -870,24 +870,29 @@ def check_api_link_exists(api_link: str) -> str | None:
 
 def get_analytics_data() -> pd.DataFrame:
     """
-    Busca todos os dados da tabela final de análise 'analytics_respondents'.
+    Busca dados da tabela principal E da tabela histórica, unindo os resultados.
     """
     conn = get_db_connection()
-    if conn is None:
-        return pd.DataFrame()
+    if conn is None: return pd.DataFrame()
 
-    query = "SELECT * FROM analytics_respondents;"
-
+    # Query que une os dados de 2025 (live) com os dados históricos (2021-24)
+    query = """
+        SELECT * FROM analytics_respondents
+        UNION ALL
+        SELECT * FROM analytics_respondents_historical;
+    """
     try:
         df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
-        # Se a tabela ainda não existir, não queremos que o app quebre
-        if "relation \"analytics_respondents\" does not exist" in str(e):
-            return pd.DataFrame()
+        if "relation \"analytics_respondents_historical\" does not exist" in str(e):
+             # Se a tabela histórica ainda não existe, busca apenas da principal
+             st.warning("Tabela histórica não encontrada, carregando apenas dados recentes.")
+             return pd.read_sql_query("SELECT * FROM analytics_respondents;", conn)
         else:
             st.error(f"Erro ao buscar dados de análise: {e}")
             return pd.DataFrame()
+
 
 
 # Fim
