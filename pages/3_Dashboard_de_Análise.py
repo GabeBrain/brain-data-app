@@ -186,17 +186,78 @@ if total_respondentes > 0:
                 )
 
         elif tipo_grafico == 'Série Temporal (Linha)':
-            if 'data_pesquisa' in df_filtrado.columns and pd.to_datetime(
-                    df_filtrado['data_pesquisa'],
-                    errors='coerce').notna().any():
-                # (A lógica para a série temporal, com seus próprios seletores, continua aqui)
-                # ...
-                st.info("Funcionalidade de Série Temporal em construção."
-                        )  # Placeholder
+            # --- INÍCIO DO NOVO BLOCO DE CÓDIGO ---
+            if 'data_pesquisa' not in df_filtrado.columns or df_filtrado['data_pesquisa'].isna().all():
+                st.warning("A coluna 'data_pesquisa' com dados válidos é necessária para gráficos de série temporal.")
             else:
-                st.warning(
-                    "A coluna 'data_pesquisa' com dados válidos é necessária para gráficos de série temporal."
-                )
+                st.markdown("---")
+                st.subheader("Configurações da Análise Temporal")
+
+                # --- 1. Controles da Análise ---
+                col1, col2, col3 = st.columns(3)
+
+                # Controle da Métrica
+                metricas_disponiveis = {
+                    'Contagem de Respondentes': ('respondent_id', 'count'),
+                    'Média de Renda Estimada': ('renda_valor_estimado', 'mean'),
+                    'Média de Idade': ('idade_numerica', 'mean')
+                }
+                metrica_selecionada = col1.selectbox("Selecione a Métrica:", options=metricas_disponiveis.keys())
+
+                # Controle da Granularidade
+                granularidades = {
+                    'Diário': 'D',
+                    'Semanal': 'W-Mon',
+                    'Mensal': 'ME',
+                    'Trimestral': 'QE'
+                }
+                granularidade_selecionada = col2.selectbox("Agrupar por Período:", options=granularidades.keys())
+                
+                # Controle da Dimensão de Comparação
+                opcoes_dimensao = ['Nenhuma'] + [
+                    col for col in ['regiao', 'geracao', 'localidade', 'faixa_etaria', 'renda_classe_agregada'] 
+                    if col in df_filtrado.columns and df_filtrado[col].nunique() > 1
+                ]
+                dimensao_selecionada = col3.selectbox("Comparar por Dimensão (opcional):", options=opcoes_dimensao)
+
+                # --- 2. Lógica de Processamento de Dados ---
+                df_ts = df_filtrado.copy()
+                df_ts['data_pesquisa'] = pd.to_datetime(df_ts['data_pesquisa'])
+                
+                coluna_metrica, agg_func = metricas_disponiveis[metrica_selecionada]
+
+                # Remove nulos da coluna da métrica para evitar erros de cálculo
+                if coluna_metrica != 'respondent_id':
+                    df_ts.dropna(subset=[coluna_metrica], inplace=True)
+
+                if df_ts.empty:
+                    st.warning("Nenhum dado válido para a métrica selecionada neste período.")
+                else:
+                    # Define o índice como a data para o resample
+                    df_ts = df_ts.set_index('data_pesquisa')
+                    
+                    # Agrupa e faz o resample
+                    resample_rule = granularidades[granularidade_selecionada]
+                    
+                    if dimensao_selecionada == 'Nenhuma':
+                        # Cenário 1: Sem dimensão, apenas uma linha
+                        df_plot = df_ts.resample(resample_rule)[coluna_metrica].agg(agg_func)
+                        titulo = f"{metrica_selecionada} ({granularidade_selecionada})"
+                    else:
+                        # Cenário 2: Com dimensão, múltiplas linhas
+                        df_plot = df_ts.groupby(dimensao_selecionada).resample(resample_rule)[coluna_metrica].agg(agg_func)
+                        df_plot = df_plot.unstack(level=0) # Transforma a dimensão em colunas
+                        titulo = f"{metrica_selecionada} por {dimensao_selecionada} ({granularidade_selecionada})"
+                    
+                    # --- 3. Renderização do Gráfico ---
+                    if df_plot.empty:
+                        st.info("Nenhum dado para exibir com as configurações atuais.")
+                    else:
+                        fig = px.line(df_plot, title=titulo)
+                        fig.update_layout(legend_title_text=dimensao_selecionada.replace('_', ' ').title())
+                        st.plotly_chart(fig, use_container_width=True)
+
+            # --- FIM DO NOVO BLOCO DE CÓDIGO ---
 
     except Exception as e:
         st.error(f"Não foi possível gerar o gráfico. Erro: {e}")
