@@ -164,3 +164,4 @@ cython_debug/
 
 # Ignorar scripts de carga com credenciais
 scripts/load_historical_data.py
+scripts/diagnose_historical_data.py
