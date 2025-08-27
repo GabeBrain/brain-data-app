@@ -711,11 +711,13 @@ MAPA_TEMPO_INTENCAO = {
     '3. Em até 18 meses': '3. Até 1 ano e meio',
     'Em até 18 meses': '3. Até 1 ano e meio',
     '3. Em até 18 meses (1 ano e meio)': '3. Até 1 ano e meio',
+    '3. Em até 1 ano e meio': '3. Até 1 ano e meio',
 
     # Variações para "Até 2 anos"
     '4. Em até 24 meses': '4. Até 2 anos',
     'Em até 24 meses': '4. Até 2 anos',
     '4. Em até 24 meses (2 anos)': '4. Até 2 anos',
+    '4. Em até 2 anos': '4. Até 2 anos',
 
     # Variações para "Mais de 2 anos"
     '5. Acima de 12 meses':
@@ -724,7 +726,7 @@ MAPA_TEMPO_INTENCAO = {
     'Acima de 24 meses': '5. Mais de 2 anos',
     '5. Acima de 2 anos': '5. Mais de 2 anos',
     '5. Acima de 24 meses (acima de 2 anos)': '5. Mais de 2 anos',
-
+    
     # Valores a serem ignorados
     '-': None
 }
