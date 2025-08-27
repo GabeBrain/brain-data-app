@@ -161,3 +161,6 @@ cython_debug/
 
 # .gitignore
 .streamlit/secrets.toml
+
+# Ignorar scripts de carga com credenciais
+scripts/load_historical_data.py

@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import time
+
 from src.database import get_analytics_data
 
 st.set_page_config(layout="wide", page_title="Dashboard de Análise")
@@ -14,57 +14,55 @@ st.markdown(
     "Use os filtros na barra lateral para explorar os dados dos respondentes de forma interativa."
 )
 
-# --- Botão para Limpar o Cache e Forçar a Atualização ---
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Atualizar Dados do Dashboard"):
-    st.cache_data.clear()
-    st.rerun()
 
-
-# --- 1. Carregamento dos Dados ---
 @st.cache_data(ttl=3600)
 def load_data():
-    """Carrega os dados da tabela de análise e os armazena em cache."""
+
     return get_analytics_data()
 
 
 df = load_data()
 
 if df.empty:
-    st.warning(
-        "A tabela de análise ('analytics_respondents') está vazia. Execute a pipeline na página de 'Manutenção e Admin' para populá-la."
-    )
+    st.warning("A tabela de análise está vazia. Execute a pipeline na página de 'Manutenção e Admin'.")
     st.stop()
 
-# --- 2. Barra Lateral de Filtros ---
-st.sidebar.header("Filtros do Dashboard")
 
-# Filtros com verificação de existência e valores nulos
+st.sidebar.header("Filtros do Dashboard")
+if st.sidebar.button("🔄 Atualizar Dados do Dashboard"):
+    st.cache_data.clear()
+    st.rerun()
+
+# --- LÓGICA DE FILTROS CORRIGIDA ---
 if 'regiao' in df.columns and df['regiao'].notna().any():
     regioes_disponiveis = sorted(df['regiao'].dropna().unique().tolist())
-    regiao_selecionada = st.sidebar.multiselect("Região",
-                                                options=regioes_disponiveis,
-                                                default=regioes_disponiveis)
+    # ALTERADO: O padrão agora é 'None' (vazio), para não filtrar nada inicialmente.
+    regiao_selecionada = st.sidebar.multiselect("Região", options=regioes_disponiveis, default=None)
 else:
     regiao_selecionada = []
 
 if 'geracao' in df.columns and df['geracao'].notna().any():
     geracoes_disponiveis = sorted(df['geracao'].dropna().unique().tolist())
-    geracao_selecionada = st.sidebar.multiselect("Geração",
-                                                 options=geracoes_disponiveis,
-                                                 default=geracoes_disponiveis)
+    # ALTERADO: O padrão agora é 'None' (vazio).
+    geracao_selecionada = st.sidebar.multiselect("Geração", options=geracoes_disponiveis, default=None)
 else:
     geracao_selecionada = []
 
-if 'renda_classe_agregada' in df.columns and df['renda_classe_agregada'].notna(
-).any():
-    classes_disponiveis = sorted(
-        df['renda_classe_agregada'].dropna().unique().tolist())
-    classe_selecionada = st.sidebar.multiselect("Classe Social",
-                                                options=classes_disponiveis,
-                                                default=classes_disponiveis)
+if 'renda_classe_agregada' in df.columns and df['renda_classe_agregada'].notna().any():
+    classes_disponiveis = sorted(df['renda_classe_agregada'].dropna().unique().tolist())
+    # ALTERADO: O padrão agora é 'None' (vazio).
+    classe_selecionada = st.sidebar.multiselect("Classe Social", options=classes_disponiveis, default=None)
 else:
     classe_selecionada = []
+
+# A lógica de filtragem em si continua a mesma e funcionará corretamente agora.
+df_filtrado = df.copy()
+if regiao_selecionada:
+    df_filtrado = df_filtrado[df_filtrado['regiao'].isin(regiao_selecionada)]
+if geracao_selecionada:
+    df_filtrado = df_filtrado[df_filtrado['geracao'].isin(geracao_selecionada)]
+if classe_selecionada:
+    df_filtrado = df_filtrado[df_filtrado['renda_classe_agregada'].isin(classe_selecionada)]
 
 # --- 3. Lógica de Filtragem do DataFrame ---
 df_filtrado = df.copy()
