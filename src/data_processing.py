@@ -677,26 +677,20 @@ def classify_cidade(cidade):
 # --- 4. LÓGICA DE INTENÇÃO DE COMPRA ---
 
 MAPA_INTENCAO_COMPRA = {
-    "1. Você não pretende comprar imóvel neste período":
-    "Não pretende comprar",
-    "1. Você não pretende locar imóvel neste período":
-    "Não pretende comprar",  # Assumindo que o objetivo é unificar
-    "1. Não pretendo comprar imóvel neste período":
-    "Não pretende comprar",
-    "3. Pretende comprar e já está procurando na internet":
-    "Pretende e procurando",
-    "4. Pretende comprar e já começou a visitar imobiliárias, stands de vendas e imóveis":
-    "Pretende e visitando",
-    "4. Pretende locar e já começou a visitar imobiliárias e imóveis":
-    "Pretende e visitando",
-    "2. Pretende comprar, mas ainda não começou a procurar":
-    "Pretende, mas não procurando",
-    "3. Pretende locar e já está procurando na internet":
-    "Pretende e procurando",
-    "2. Pretende locar, mas ainda não começou a procurar":
-    "Pretende, mas não procurando",
-    "2. Sim, pretendo comprar um imóvel neste período":
-    "Pretende, mas não procurando"
+    "1. Você não pretende comprar imóvel neste período":"Não pretende comprar",
+    "1. Você não pretende locar imóvel neste período":"Não pretende comprar",  # Assumindo que o objetivo é unificar
+    "1. Não pretendo comprar imóvel neste período":"Não pretende comprar",
+    "3. Pretende comprar e já está procurando na internet":"Pretende e procurando",
+    "4. Pretende comprar e já começou a visitar imobiliárias, stands de vendas e imóveis":"Pretende e visitando",
+    "4. Pretende locar e já começou a visitar imobiliárias e imóveis":"Pretende e visitando",
+    "2. Pretende comprar, mas ainda não começou a procurar":"Pretende, mas não procurando",
+    "3. Pretende locar e já está procurando na internet":"Pretende e procurando",
+    "2. Pretende locar, mas ainda não começou a procurar":"Pretende, mas não procurando",
+    "2. Sim, pretendo comprar um imóvel neste período":"Pretende, mas não procurando",
+    "2. Sim, mas ainda não começou a procurar ativamente":"Pretende, mas não procurando",
+    "1. Não pretende comprar imóvel neste período":"Não pretende comprar",
+    "4. Sim e já começou a visitar imóveis, stands de vendas, imobiliárias, etc.":"Pretende e visitando",
+    "3. Sim e já está selecionando na internet":"Pretende e procurando",
 }
 
 MAPA_TEMPO_INTENCAO = {
