@@ -1,7 +1,32 @@
 {
   "versoes": [
     {
-      "id_versao": "regras_2025_T1",
+      "id_versao": "regras_2021_a_2022",
+      "data_inicio_validade": "2000-01-01",
+      "data_fim_validade": "2022-12-31",
+      "regras": [
+        { "classe_agregada": "E", "classe_detalhada": "E", "min_renda": 0, "max_renda": 1313 },
+        { "classe_agregada": "D", "classe_detalhada": "D", "min_renda": 1314, "max_renda": 1334 },
+        { "classe_agregada": "C2", "classe_detalhada": "C2", "min_renda": 1335, "max_renda": 2307 },
+        { "classe_agregada": "C1", "classe_detalhada": "C1", "min_renda": 2308, "max_renda": 3860 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.2", "min_renda": 3861, "max_renda": 4811 },
+        { "classe_agregada": "B2", "classe_detalhada": "B2.1", "min_renda": 4812, "max_renda": 6735 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.3", "min_renda": 6736, "max_renda": 9170 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.2", "min_renda": 9171, "max_renda": 10881 },
+        { "classe_agregada": "B1", "classe_detalhada": "B1.1", "min_renda": 10882, "max_renda": 13379 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.4", "min_renda": 13380, "max_renda": 15002 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.3", "min_renda": 15003, "max_renda": 17004 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.2", "min_renda": 17005, "max_renda": 19478 },
+        { "classe_agregada": "A+", "classe_detalhada": "A+.1", "min_renda": 19479, "max_renda": 23098 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.4", "min_renda": 23099, "max_renda": 24329 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.3", "min_renda": 24330, "max_renda": 28169 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.2", "min_renda": 28170, "max_renda": 33077 },
+        { "classe_agregada": "A++", "classe_detalhada": "A++.1", "min_renda": 33078, "max_renda": 9999999 }
+      ]
+    },
+    {
+      "id_versao": "regras_2023_a_2025_T1",
+      "data_inicio_validade": "2023-01-01",
       "data_fim_validade": "2025-07-06",
       "regras": [
         { "classe_agregada": "E", "classe_detalhada": "E", "min_renda": 0, "max_renda": 1412 },
@@ -26,6 +51,7 @@
     {
       "id_versao": "regras_2025_T2",
       "data_inicio_validade": "2025-07-07",
+      "data_fim_validade": "2999-12-31",
       "regras": [
         { "classe_agregada": "E", "classe_detalhada": "E", "min_renda": 0, "max_renda": 1518 },
         { "classe_agregada": "D", "classe_detalhada": "D", "min_renda": 1519, "max_renda": 1745 },
