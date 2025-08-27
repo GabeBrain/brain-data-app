@@ -8,3 +8,4 @@ pydeck
 altair
 folium
 streamlit-folium
+matplotlib
