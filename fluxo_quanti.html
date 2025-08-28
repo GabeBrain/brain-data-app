@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fluxo de Projeto Quanti</title>
+    <title>Fluxo de Projeto Quanti (Vertical) - Brain</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --color-primary: #5b7537;
-            --color-secondary: #FFD500;
+            --color-primary: #5b7537; /* Verde Brain */
             --color-text: #333333;
-            --color-background: #FFFFFF;
-            --color-light-gray: #e5e7eb;
+            --color-background: #f9fafb; /* Cinza claro de fundo */
+            --color-line: #d1d5db; /* Cinza da linha do tempo */
         }
         body {
             font-family: 'Inter', sans-serif;
@@ -22,83 +21,106 @@
             color: var(--color-text);
         }
 
-        /* --- ESTILOS DOS BALÕES E NÍVEIS --- */
-        .task-balloon {
+        /* --- Estilos da Linha do Tempo Vertical --- */
+        .timeline-container {
+            position: relative;
+            max-width: 800px; /* Largura máxima do container */
+            margin: auto;
+        }
+        /* A linha central vertical */
+        .timeline-container::after {
+            content: '';
             position: absolute;
-            transform: translateX(-50%);
+            width: 3px;
+            background-color: var(--color-line);
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -1.5px;
+            z-index: 1;
+        }
+
+        /* --- Estilos dos Balões de Tarefa --- */
+        .task-balloon {
+            position: relative;
+            padding: 16px;
             background-color: white;
-            border-radius: 12px;
-            padding: 12px;
-            width: 200px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-top: 4px solid;
+            width: 45%; /* Cada balão ocupa 45% da largura */
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-left: 4px solid;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: transform 0.3s ease;
             z-index: 10;
         }
         .task-balloon:hover {
-            transform: translateX(-50%) translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            transform: scale(1.03);
         }
         
-        /* Rabicho e conector aplicados a todos os balões */
-        .task-balloon::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-width: 10px 10px 0 10px;
-            border-style: solid;
-            border-color: white transparent transparent transparent;
+        /* Posicionamento dos balões */
+        .task-balloon.left {
+            left: 0;
         }
-        .task-connector {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            width: 2px;
-            background-image: linear-gradient(to bottom, var(--color-light-gray) 50%, transparent 50%);
-            background-size: 2px 8px;
-            z-index: 5;
+        .task-balloon.right {
+            left: 55%; /* 45% de largura + 10% de espaço no meio */
         }
 
+        /* Conector (rabicho) apontando para a linha do tempo */
+        .task-balloon::after {
+            content: " ";
+            position: absolute;
+            top: 22px;
+            border-width: 10px;
+            border-style: solid;
+        }
+        .task-balloon.left::after {
+            right: -20px;
+            border-color: transparent transparent transparent white;
+        }
+        .task-balloon.right::after {
+            left: -20px;
+            border-color: transparent white transparent transparent;
+        }
+        
+        /* Círculo na linha do tempo para marcar a data */
+        .task-dot {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border: 4px solid var(--color-line);
+            border-radius: 50%;
+            z-index: 20;
+        }
+
+        /* Detalhes expansíveis */
         .task-details {
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.5s ease-in-out;
+            transition: max-height 0.5s ease-in-out, margin-top 0.5s ease-in-out;
         }
         .task-details.expanded {
             max-height: 100px;
+            margin-top: 8px;
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="container mx-auto max-w-7xl">
-        <header class="flex items-center justify-center mb-8 text-center">
-            <img src="assets/logoBrain.png" alt="Logo Brain" class="h-12 mr-4">
-            <div>
-                <h1 class="text-3xl md:text-4xl font-bold" style="color: var(--color-primary);">Fluxo de Projeto Quanti</h1>
-                <p class="text-gray-600 mt-1">Visão horizontal das etapas e prazos do projeto.</p>
-            </div>
+    <div class="container mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold" style="color: var(--color-primary);">Fluxo de Projeto Quanti</h1>
+            <p class="text-gray-600 mt-1">Visão interativa das etapas, prazos e responsáveis.</p>
         </header>
 
-        <div class="w-full mt-16 relative" style="overflow-x: auto; padding-bottom: 20px;">
-            <div id="timeline-wrapper" class="relative px-28" style="min-width: 1800px; height: 400px;">
-                
-                <div id="phases-container" class="relative w-full h-10 mb-2"></div>
-
-                <div class="absolute w-full h-1 bg-gray-200 top-1/2 transform -translate-y-1/2 left-0">
-                    <div class="w-full h-full bg-gray-300 rounded-full"></div>
-                </div>
-
-                <div id="tasks-container" class="absolute w-full top-1/2 h-full left-0"></div>
-
+        <div id="timeline-container" class="timeline-container">
             </div>
-        </div>
     </div>
 
     <script>
+        // --- DADOS DO PROJETO (Extraídos do seu texto) ---
         const projectData = {
             phases: [
                 { name: "MATERIAL DE PESQUISA", color: "#60a5fa" }, // Azul
@@ -106,108 +128,92 @@
                 { name: "RELATÓRIO A&R", color: "#10b981" }, // Verde
                 { name: "APRESENTAÇÃO VERSÃO FINAL", color: "#6366f1" } // Indigo
             ],
-            // Usei a lista completa de tarefas para testar melhor a sobreposição
             tasks: [
+                // MATERIAL DE PESQUISA
                 { phase: "MATERIAL DE PESQUISA", start: 0, end: 1, name: "Entrada da proposta no sistema", responsible: "CONSULTOR" },
-                { phase: "MATERIAL DE PESQUISA", start: 1, end: 2, name: "Envio do checklist para cliente", responsible: "gestora quanti" },
-                { phase: "MATERIAL DE PESQUISA", start: 1, end: 2, name: "Agenda para reunião de briefing com cliente", responsible: "atendimento" },
-                { phase: "MATERIAL DE PESQUISA", start: 7, end: 8, name: "Realização da reunião de briefing", responsible: "atendimento + CLIENTE" },
-                { phase: "MATERIAL DE PESQUISA", start: 8, end: 14, name: "Elaboração da ATA da reunião", responsible: "atendimento" },
-                { phase: "MATERIAL DE PESQUISA", start: 14, end: 15, name: "Recebimento do checklist preenchido", responsible: "cliente" },
-                { phase: "MATERIAL DE PESQUISA", start: 15, end: 17, name: "Email interno de abertura do MP", responsible: "atendimento" },
-                { phase: "MATERIAL DE PESQUISA", start: 17, end: 18, name: "Elaboração do Material de Pesquisa", responsible: "analista" },
-                { phase: "MATERIAL DE PESQUISA", start: 18, end: 21, name: "Revisão do MP e envio da v1", responsible: "atendimento" },
-                { phase: "MATERIAL DE PESQUISA", start: 30, end: 31, name: "Aprovação do MP e envio do cronograma", responsible: "atendimento" },
-                { phase: "CAMPO", start: 31, end: 32, name: "Envio do email interno com MP aprovado", responsible: "atendimento" },
-                { phase: "CAMPO", start: 31, end: 32, name: "Contratação dos pesquisadores", responsible: "gestor campo" },
-                { phase: "CAMPO", start: 40, end: 56, name: "Coleta de dados", responsible: "auditor + pesquisadores" },
-                { phase: "CAMPO", start: 44, end: 48, name: "Parcial 1 (25%)", responsible: "analista" },
-                { phase: "CAMPO", start: 48, end: 52, name: "Parcial 2 (50%)", responsible: "analista" },
-                { phase: "CAMPO", start: 56, end: 60, name: "Término do campo", responsible: "auditor" },
-                { phase: "CAMPO", start: 60, end: 61, name: "Base higienizada", responsible: "auditor" },
-                { phase: "RELATÓRIO A&R", start: 61, end: 64, name: "Elaboração do relatório", responsible: "analista" },
-                { phase: "RELATÓRIO A&R", start: 64, end: 65, name: "Revisões", responsible: "A&R" },
-                { phase: "RELATÓRIO A&R", start: 75, end: 79, name: "Validação final", responsible: "Especialista A&R" },
-                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 79, end: 80, name: "VAP -> Consultor", responsible: "A&R" },
-                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 80, end: 81, name: "Apresentação", responsible: "CONSULTOR" },
-                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 81, end: 82, name: "VF + Upload + Satisfação", responsible: "atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 1, end: 2, name: "Envio do checklist para cliente", responsible: "Gestora Quanti" },
+                { phase: "MATERIAL DE PESQUISA", start: 1, end: 2, name: "Agenda para reunião de briefing", responsible: "Atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 7, end: 8, name: "Realização da reunião de briefing", responsible: "Atendimento + CLIENTE" },
+                { phase: "MATERIAL DE PESQUISA", start: 8, end: 14, name: "Elaboração da ATA da reunião", responsible: "Atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 14, end: 15, name: "Recebimento do checklist", responsible: "CLIENTE" },
+                { phase: "MATERIAL DE PESQUISA", start: 15, end: 17, name: "Email interno de abertura do MP", responsible: "Atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 17, end: 18, name: "Elaboração do Material de Pesquisa", responsible: "Analista" },
+                { phase: "MATERIAL DE PESQUISA", start: 18, end: 21, name: "Revisão do MP e envio da v1", responsible: "Atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 21, end: 24, name: "Elaboração do orçamento da coleta", responsible: "Gestor Campo" },
+                { phase: "MATERIAL DE PESQUISA", start: 24, end: 27, name: "Aprovação do orçamento da coleta", responsible: "Financeiro + CEO" },
+                { phase: "MATERIAL DE PESQUISA", start: 27, end: 30, name: "Ajustes do MP e envio da v2", responsible: "Analista + Atendimento" },
+                { phase: "MATERIAL DE PESQUISA", start: 30, end: 31, name: "Aprovação do MP e envio do cronograma", responsible: "Atendimento" },
+                // CAMPO
+                { phase: "CAMPO", start: 31, end: 32, name: "Email interno com MP aprovado", responsible: "Atendimento" },
+                { phase: "CAMPO", start: 31, end: 32, name: "Contratação dos pesquisadores", responsible: "Gestor Campo" },
+                { phase: "CAMPO", start: 32, end: 34, name: "Sistematização do MP na plataforma", responsible: "Auditor" },
+                { phase: "CAMPO", start: 32, end: 34, name: "Elaboração do Plano Amostral", responsible: "Analista" },
+                { phase: "CAMPO", start: 34, end: 37, name: "Aprovação do Plano Amostral", responsible: "Analista + CONSULTOR" },
+                { phase: "CAMPO", start: 34, end: 37, name: "Teste 1 do MP (GDS)", responsible: "Auditor + Auditor" },
+                { phase: "CAMPO", start: 34, end: 37, name: "Teste 2 do MP (Simulação)", responsible: "Auditor + Analista" },
+                { phase: "CAMPO", start: 37, end: 40, name: "Treinamento dos pesquisadores", responsible: "Auditor" },
+                { phase: "CAMPO", start: 40, end: 56, name: "Coleta de dados", responsible: "Auditor + Pesquisadores" },
+                { phase: "CAMPO", start: 44, end: 48, name: "Parcial 1 (25%)", responsible: "Analista" },
+                { phase: "CAMPO", start: 48, end: 52, name: "Parcial 2 (50%)", responsible: "Analista" },
+                { phase: "CAMPO", start: 52, end: 56, name: "Parcial 3 (75%)", responsible: "Analista" },
+                { phase: "CAMPO", start: 56, end: 60, name: "Término do campo", responsible: "Auditor" },
+                { phase: "CAMPO", start: 60, end: 61, name: "Base higienizada", responsible: "Auditor" },
+                // RELATÓRIO A&R
+                { phase: "RELATÓRIO A&R", start: 61, end: 64, name: "Elaboração do relatório", responsible: "Analista" },
+                { phase: "RELATÓRIO A&R", start: 64, end: 65, name: "Revisão do relatório", responsible: "A&R" },
+                { phase: "RELATÓRIO A&R", start: 65, end: 66, name: "Correção do relatório", responsible: "Analista" },
+                { phase: "RELATÓRIO A&R", start: 65, end: 66, name: "Revisão final e recomendação", responsible: "A&R" },
+                { phase: "RELATÓRIO A&R", start: 66, end: 75, name: "Validação final do relatório", responsible: "Especialista A&R/MK/FT" },
+                // APRESENTAÇÃO VERSÃO FINAL
+                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 75, end: 79, name: "Envio da VAP para consultor", responsible: "A&R" },
+                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 79, end: 80, name: "Apresentação do relatório", responsible: "CONSULTOR + CLIENTE" },
+                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 80, end: 81, name: "Envio da VF para atendimento", responsible: "CONSULTOR" },
+                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 80, end: 81, name: "Upload do relatório no site", responsible: "Atendimento / Gestora Quanti" },
+                { phase: "APRESENTAÇÃO VERSÃO FINAL", start: 80, end: 81, name: "Envio da pesquisa de satisfação", responsible: "Gestora Quanti" },
             ]
         };
 
+        // --- LÓGICA DE RENDERIZAÇÃO ---
         document.addEventListener('DOMContentLoaded', function () {
-            const phasesContainer = document.getElementById('phases-container');
-            const tasksContainer = document.getElementById('tasks-container');
-            const timelineWrapper = document.getElementById('timeline-wrapper');
-            const totalDays = Math.max(...projectData.tasks.map(t => t.end));
+            const timelineContainer = document.getElementById('timeline-container');
             
-            // Renderiza Fases (sem alteração na lógica)
-            projectData.phases.forEach(phase => {
-                const tasksInPhase = projectData.tasks.filter(t => t.phase === phase.name);
-                if (tasksInPhase.length === 0) return;
-                const phaseStart = Math.min(...tasksInPhase.map(t => t.start));
-                const phaseEnd = Math.max(...tasksInPhase.map(t => t.end));
-                const leftPosition = (phaseStart / totalDays) * 100;
-                const width = ((phaseEnd - phaseStart) / totalDays) * 100;
-                const phaseBar = document.createElement('div');
-                phaseBar.className = 'absolute h-full rounded-lg flex items-center justify-center text-white font-bold text-sm';
-                phaseBar.style.left = `${leftPosition}%`;
-                phaseBar.style.width = `${width}%`;
-                phaseBar.style.backgroundColor = phase.color;
-                phaseBar.textContent = phase.name;
-                phasesContainer.appendChild(phaseBar);
-            });
+            // Ordena as tarefas pela data de início para renderizar na ordem correta
+            const sortedTasks = projectData.tasks.sort((a, b) => a.start - b.start);
 
-            // --- LÓGICA DE RENDERIZAÇÃO DE TAREFAS ATUALIZADA ---
-            // 1. Agrupa as tarefas por dia de início
-            const tasksByDay = projectData.tasks.reduce((acc, task) => {
-                if (!acc[task.start]) acc[task.start] = [];
-                acc[task.start].push(task);
-                return acc;
-            }, {});
+            // Adiciona as tarefas ao DOM
+            sortedTasks.forEach((task, index) => {
+                const phaseInfo = projectData.phases.find(p => p.name === task.phase);
+                const phaseColor = phaseInfo ? phaseInfo.color : '#333';
+                
+                const side = (index % 2 === 0) ? 'left' : 'right'; // Alterna entre esquerda e direita
+                
+                // Cria o container da tarefa (wrapper que inclui o ponto e o balão)
+                const taskWrapper = document.createElement('div');
+                taskWrapper.className = 'relative mb-8';
 
-            // 2. Ajusta a altura do wrapper conforme o maior número de tarefas por dia
-            const verticalSpacing = 120;       // altura extra por nível
-            const baseOffset = 40;             // altura do primeiro balão
-            const baseHeight = 160;            // altura base do wrapper
-            const maxTasksPerDay = Math.max(...Object.values(tasksByDay).map(t => t.length));
-            timelineWrapper.style.height = `${baseHeight + maxTasksPerDay * verticalSpacing}px`;
-
-            // 3. Itera sobre os dias que têm tarefas
-            for (const day in tasksByDay) {
-                const tasks = tasksByDay[day];
-                const dayPosition = (day / totalDays) * 100;
-
-                tasks.forEach((task, index) => {
-                    const balloon = document.createElement('div');
-                    balloon.className = 'task-balloon';
-                    balloon.style.left = `${dayPosition}%`;
-                    const bottomValue = baseOffset + index * verticalSpacing;
-                    balloon.style.bottom = `${bottomValue}px`;
-                    const phaseColor = projectData.phases.find(p => p.name === task.phase)?.color || '#000';
-                    balloon.style.borderTopColor = phaseColor;
-
-                    balloon.innerHTML = `
-                        <div class="font-semibold">${task.name}</div>
-                        <div class="text-sm text-gray-500">Resp.: ${task.responsible}</div>
-                        <div class="task-details mt-2 text-sm text-gray-600">
-                            Início: Dia ${task.start}<br>Fim: Dia ${task.end}
+                taskWrapper.innerHTML = `
+                    <div class="task-dot" style="background-color: ${phaseColor};"></div>
+                    <div class="task-balloon ${side}" style="border-left-color: ${phaseColor};">
+                        <div class="text-xs font-bold uppercase" style="color: ${phaseColor};">${task.phase}</div>
+                        <div class="font-semibold text-gray-800 mt-1">${task.name}</div>
+                        <div class="text-sm text-gray-500 mt-2"><b>Resp.:</b> ${task.responsible}</div>
+                        <div class="task-details text-sm text-gray-600">
+                            <b>Início:</b> Dia ${task.start}<br>
+                            <b>Fim:</b> Dia ${task.end}<br>
+                            <b>Duração:</b> ${task.end - task.start} dia(s)
                         </div>
-                    `;
+                    </div>
+                `;
 
-                    const connector = document.createElement('div');
-                    connector.className = 'task-connector';
-                    connector.style.height = `${bottomValue - 20}px`;
-                    balloon.appendChild(connector);
-
-                    balloon.addEventListener('click', () => {
-                        const details = balloon.querySelector('.task-details');
-                        details.classList.toggle('expanded');
-                    });
-
-                    tasksContainer.appendChild(balloon);
+                // Adiciona o evento de clique para expandir/recolher
+                const balloon = taskWrapper.querySelector('.task-balloon');
+                balloon.addEventListener('click', () => {
+                    const details = balloon.querySelector('.task-details');
+                    details.classList.toggle('expanded');
                 });
-            }
-
+                
+                timelineContainer.appendChild(taskWrapper);
+            });
         });
     </script>
 </body>
