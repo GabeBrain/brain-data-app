@@ -539,20 +539,36 @@ def classify_income_by_rules(valor, data_criacao_pesquisa, all_rules):
 
 
 def calcular_media_faixa(faixa: str) -> int | None:
-    """Calcula o valor numérico médio de uma faixa de renda textual."""
-    if not isinstance(faixa, str): return None
-    numeros_encontrados = re.findall(r'[\d\.,]+', faixa)
-    if not numeros_encontrados: return None
+    """
+    Calcula o valor numérico médio de uma faixa de renda textual.
+    Versão robusta que lida com 'R$', '.' como separador de milhar e ',' como decimal.
+    """
+    if not isinstance(faixa, str):
+        return None
+    
+    # Remove 'R$', espaços em branco extras e texto que não seja número
+    texto_limpo = re.sub(r'[^\d\.,-]+', ' ', faixa).strip()
+    
+    # Encontra todos os números no texto limpo
+    numeros_encontrados = re.findall(r'[\d\.,]+', texto_limpo)
+    
+    if not numeros_encontrados:
+        return None
+        
     numeros_convertidos = []
     for num_str in numeros_encontrados:
         try:
+            # Converte o formato brasileiro (1.000,00) para um formato que o Python entende (1000.00)
             num_limpo = num_str.replace('.', '').replace(',', '.')
             numeros_convertidos.append(float(num_limpo))
         except ValueError:
             continue
-    numeros_filtrados = [n for n in numeros_convertidos if n >= 1000]
-    if not numeros_filtrados: return None
-    return int(np.mean(numeros_filtrados))
+            
+    if not numeros_convertidos:
+        return None
+        
+    # Retorna a média dos números encontrados, convertida para inteiro
+    return int(np.mean(numeros_convertidos))
 
 
 def classificar_faixa_antiga(valor: int | None) -> str | None:
@@ -661,26 +677,20 @@ def classify_cidade(cidade):
 # --- 4. LÓGICA DE INTENÇÃO DE COMPRA ---
 
 MAPA_INTENCAO_COMPRA = {
-    "1. Você não pretende comprar imóvel neste período":
-    "Não pretende comprar",
-    "1. Você não pretende locar imóvel neste período":
-    "Não pretende comprar",  # Assumindo que o objetivo é unificar
-    "1. Não pretendo comprar imóvel neste período":
-    "Não pretende comprar",
-    "3. Pretende comprar e já está procurando na internet":
-    "Pretende e procurando",
-    "4. Pretende comprar e já começou a visitar imobiliárias, stands de vendas e imóveis":
-    "Pretende e visitando",
-    "4. Pretende locar e já começou a visitar imobiliárias e imóveis":
-    "Pretende e visitando",
-    "2. Pretende comprar, mas ainda não começou a procurar":
-    "Pretende, mas não procurando",
-    "3. Pretende locar e já está procurando na internet":
-    "Pretende e procurando",
-    "2. Pretende locar, mas ainda não começou a procurar":
-    "Pretende, mas não procurando",
-    "2. Sim, pretendo comprar um imóvel neste período":
-    "Pretende, mas não procurando"
+    "1. Você não pretende comprar imóvel neste período":"Não pretende comprar",
+    "1. Você não pretende locar imóvel neste período":"Não pretende comprar",  # Assumindo que o objetivo é unificar
+    "1. Não pretendo comprar imóvel neste período":"Não pretende comprar",
+    "3. Pretende comprar e já está procurando na internet":"Pretende e procurando",
+    "4. Pretende comprar e já começou a visitar imobiliárias, stands de vendas e imóveis":"Pretende e visitando",
+    "4. Pretende locar e já começou a visitar imobiliárias e imóveis":"Pretende e visitando",
+    "2. Pretende comprar, mas ainda não começou a procurar":"Pretende, mas não procurando",
+    "3. Pretende locar e já está procurando na internet":"Pretende e procurando",
+    "2. Pretende locar, mas ainda não começou a procurar":"Pretende, mas não procurando",
+    "2. Sim, pretendo comprar um imóvel neste período":"Pretende, mas não procurando",
+    "2. Sim, mas ainda não começou a procurar ativamente":"Pretende, mas não procurando",
+    "1. Não pretende comprar imóvel neste período":"Não pretende comprar",
+    "4. Sim e já começou a visitar imóveis, stands de vendas, imobiliárias, etc.":"Pretende e visitando",
+    "3. Sim e já está selecionando na internet":"Pretende e procurando",
 }
 
 MAPA_TEMPO_INTENCAO = {
@@ -701,11 +711,13 @@ MAPA_TEMPO_INTENCAO = {
     '3. Em até 18 meses': '3. Até 1 ano e meio',
     'Em até 18 meses': '3. Até 1 ano e meio',
     '3. Em até 18 meses (1 ano e meio)': '3. Até 1 ano e meio',
+    '3. Em até 1 ano e meio': '3. Até 1 ano e meio',
 
     # Variações para "Até 2 anos"
     '4. Em até 24 meses': '4. Até 2 anos',
     'Em até 24 meses': '4. Até 2 anos',
     '4. Em até 24 meses (2 anos)': '4. Até 2 anos',
+    '4. Em até 2 anos': '4. Até 2 anos',
 
     # Variações para "Mais de 2 anos"
     '5. Acima de 12 meses':
@@ -714,7 +726,7 @@ MAPA_TEMPO_INTENCAO = {
     'Acima de 24 meses': '5. Mais de 2 anos',
     '5. Acima de 2 anos': '5. Mais de 2 anos',
     '5. Acima de 24 meses (acima de 2 anos)': '5. Mais de 2 anos',
-
+    
     # Valores a serem ignorados
     '-': None
 }
@@ -796,7 +808,6 @@ def process_and_standardize_data(long_df: pd.DataFrame,
     future_dates_mask = wide_df['data_pesquisa'] > hoje
     if future_dates_mask.any():
         wide_df.loc[future_dates_mask, 'data_pesquisa'] = pd.NaT
-    wide_df['data_pesquisa'] = wide_df['data_pesquisa'].dt.date
 
     wide_df = impute_missing_states(wide_df)
 

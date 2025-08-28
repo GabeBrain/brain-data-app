@@ -174,11 +174,21 @@ with placeholder_kpis.container():
 
 # Linha do Tempo de Coletas
 st.subheader("📅 Coletas Realizadas ao Longo do Tempo no Período")
-if not df_filtrado.empty:
-    contagem_diaria = df_filtrado.resample('D', on='data_pesquisa').size().reset_index(name='contagem')
-    contagem_diaria = contagem_diaria[contagem_diaria['contagem'] > 0]
-    if not contagem_diaria.empty:
-        st.bar_chart(contagem_diaria.set_index('data_pesquisa'))
+if not df_filtrado.empty and 'data_pesquisa' in df_filtrado.columns:
+    # Garante que a coluna de data é do tipo datetime
+    df_filtrado['data_pesquisa'] = pd.to_datetime(df_filtrado['data_pesquisa'], errors='coerce')
+    df_para_grafico = df_filtrado.dropna(subset=['data_pesquisa'])
+
+    if not df_para_grafico.empty:
+        # ALTERADO: Agrupando por hora ('h') em vez de dia ('D')
+        contagem_horaria = df_para_grafico.resample('h', on='data_pesquisa').size().reset_index(name='Coletas por Hora')
+        contagem_horaria = contagem_horaria[contagem_horaria['Coletas por Hora'] > 0]
+        
+        if not contagem_horaria.empty:
+            # ALTERADO: Usando st.area_chart para uma visualização de fluxo
+            st.area_chart(contagem_horaria.set_index('data_pesquisa'))
+        else:
+            st.info("Nenhuma coleta encontrada para a seleção atual.")
     else:
         st.info("Nenhuma coleta encontrada para a seleção atual.")
 else:
