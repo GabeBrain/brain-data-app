@@ -45,7 +45,7 @@ with tab1:
 
 # --- Conteúdo da Aba 2: Fluxo Horizontal (Timeline) ---
 with tab2:
-    st.subheader("Linha do Tempo Horizontal do Projeto")
+    st.subheader("Linha do Tempo Vertical do Projeto")
     try:
         # Caminho para o arquivo HTML original
         path_to_html = os.path.join(os.path.dirname(__file__), '..', 'fluxo_quanti.html')
