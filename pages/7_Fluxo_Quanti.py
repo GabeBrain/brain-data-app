@@ -51,7 +51,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "Fluxo de Projeto (Kanban)",
     "Fluxo de Projeto (Timeline)",
     "Cronograma Jotform",
-    "Apresentação MKT (PDF)"  
+    "Memorando de Armazenamento | Áudios"  
 ])
 
 # Aba 1: Kanban com Filtros
@@ -71,6 +71,6 @@ with tab3:
 
 # Aba 4: Renderização do PDF
 with tab4:
-    st.subheader("Documento de Referência: Apresentação de Marketing")
+    st.subheader("Memorando de Armazenamento | Áudios")
     # Chama a nova função para renderizar o PDF
     render_pdf(file_name="assets/Memorando_Widget_Gravacao.pdf")
