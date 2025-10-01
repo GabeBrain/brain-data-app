@@ -18,7 +18,6 @@
             color: #333;
             line-height: 1.6;
         }
-        
         .container {
             max-width: 900px;
             margin: 0 auto;
@@ -27,18 +26,15 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
-        
         h1 {
             color: #2c3e50;
             text-align: center;
             margin-bottom: 40px;
             font-weight: 700;
         }
-        
         .phase {
             margin-bottom: 30px;
-            /* A cor da borda agora é uma variável CSS */
-            border-left: 5px solid var(--phase-color); 
+            border-left: 5px solid var(--phase-color);
             padding-left: 20px;
             position: relative;
         }
@@ -57,8 +53,7 @@
         .phase-header:hover { background-color: #dfe6e9; }
         .phase-header h2 {
             margin: 0;
-            /* A cor do título agora é a variável CSS */
-            color: var(--phase-color); 
+            color: var(--phase-color);
             font-size: 1.4em;
             font-weight: 500;
         }
@@ -75,12 +70,10 @@
             margin-bottom: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
         }
-        
         .task h3 {
             margin-top: 0;
             margin-bottom: 10px;
-            /* A cor do título da tarefa também usa a variável */
-            color: var(--phase-color); 
+            color: var(--phase-color);
             font-size: 1.2em;
             font-weight: 500;
         }
@@ -92,71 +85,60 @@
 <body>
     <div class="container" id="timeline-container">
         <h1>Plano de Atividades do Projeto de Pesquisa</h1>
-        
-    </div>
+        </div>
 
     <script>
-        // --- DADOS CENTRALIZADOS DO PROJETO ---
         const projectPhases = [
             {
                 title: "Teste do Questionário (Free)",
                 date: "13 de agosto (4ª feira)",
                 status: "completed", // <-- Marcado como concluído
-                tasks: [
-                    { 
-                        title: "Criar o questionário padrão dentro do Jotform (versão free)",
-                        details: [
-                            "Desvios", "Imagens (associar, tela cheia...)", "Encerramentos", 
-                            "Códigos das perguntas", "Indicação de ajustes para aprovação", 
-                            "Exportar em .pdf para aprovação"
-                        ],
-                        responsible: "Gabriel"
-                    }
-                ]
+                tasks: [{ title: "Criar o questionário padrão dentro do Jotform (versão free)", details: ["Desvios", "Imagens (associar, tela cheia...)", "Encerramentos", "Códigos das perguntas", "Indicação de ajustes para aprovação", "Exportar em .pdf para aprovação"], responsible: "Gabriel" }]
             },
             {
                 title: "Plano de Implantação",
                 date: "15 de agosto (6ª feira)",
                 status: "completed", // <-- Marcado como concluído
-                tasks: [
-                    { 
-                        title: "Reunião com Letícia para validar o plano (14h)",
-                        details: [],
-                        responsible: "Angela, Gabriel e Leandro"
-                    }
-                ]
+                tasks: [{ title: "Reunião com Letícia para validar o plano (14h)", details: [], responsible: "Angela, Gabriel e Leandro" }]
             },
             {
                 title: "Assinar Jotform",
                 date: "18 de agosto (2ª feira)",
                 status: "completed", // <-- Marcado como concluído
-                tasks: [
-                    {
-                        title: "Definir o plano para contratar",
-                        details: ["Definir em qual conta contratar", "Assinar o plano"],
-                        responsible: "Angela e Letícia"
-                    }
-                ]
+                tasks: [{ title: "Definir o plano para contratar", details: ["Definir em qual conta contratar", "Assinar o plano"], responsible: "Angela e Letícia" }]
             },
             {
                 title: "Teste do Questionário (Pago)",
                 date: "18-22 de agosto (2ª - 6ª feira)",
-                status: "pending", // <-- Marcado como pendente (usará a cor padrão)
-                tasks: [
-                     {
-                        title: "Avaliar funcionalidades da versão paga",
-                        details: [
-                            "Limite de elementos", "Levantar necessidades não contempladas",
-                            "Marcar conversa com atendimento Jotform", "Criar MP de cliente para teste real: Tacla"
-                        ],
-                        responsible: "Gabriel"
-                    }
-                ]
+                status: "pending", // <-- Marcado como pendente
+                tasks: [{ title: "Avaliar funcionalidades a mais na versão paga", details: ["Limite de elementos", "Levantar necessidades não contempladas", "Marcar conversa com atendimento Jotform", "Criar MP de cliente para teste real: Tacla"], responsible: "Gabriel" }]
             },
-            // ... Adicione as outras fases aqui seguindo o mesmo padrão ...
+            {
+                title: "Avaliação do Ambiente de Auditoria",
+                date: "18-22 de agosto (2ª - 6ª feira)",
+                status: "pending",
+                tasks: [{ title: "Análise e Testes do Ambiente", details: ["Login de pesquisador", "Entrada das respostas offline", "API para acompanhamento do campo", "Status de aprovação/reprovação", "Validação de dados (telefones)"], responsible: "Leandro + Gabriel" }]
+            },
+            {
+                title: "Programação e Teste de Widget: Gravação de Áudio",
+                date: "25-30 de agosto (2ª a 6ª feira)",
+                status: "pending",
+                tasks: [{ title: "Implementação e Testes", details: ["Gravação de áudio", "Uso offline", "Visualização das imagens", "Georreferenciamento"], testInfo: "Testes nos shoppings Tacla: Palladium Curitiba (60) e Ponta Grossa (40).", responsible: "Leandro" }]
+            },
+            {
+                title: "Teste dos Dados",
+                date: "01-05 de setembro (2ª - 6ª feira)",
+                status: "pending",
+                tasks: [{ title: "Elaboração das Parciais", details: [], responsible: "Gabriel" }]
+            },
+            {
+                title: "Elaboração do Relatório e Treinamento das Equipes",
+                date: "08-12 de setembro (2ª - 6ª feira)",
+                status: "pending",
+                tasks: [{ title: "Atividades Finais", details: ["Elaboração do relatório", "Treinamento das equipes (Analistas, Auditores, Pesquisadores)"], responsible: "Equipe" }]
+            }
         ];
 
-        // --- LÓGICA DE RENDERIZAÇÃO ---
         document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('timeline-container');
             
@@ -169,11 +151,13 @@
                 
                 let tasksHtml = '';
                 phase.tasks.forEach(task => {
-                    let detailsHtml = task.details.length > 0 ? `<ul>${task.details.map(d => `<li>${d}</li>`).join('')}</ul>` : '';
+                    let detailsList = task.details.length > 0 ? `<ul>${task.details.map(d => `<li>${d}</li>`).join('')}</ul>` : '';
+                    let testInfoHtml = task.testInfo ? `<p><strong>Testes:</strong> ${task.testInfo}</p>` : '';
                     tasksHtml += `
                         <div class="task">
                             <h3>${task.title}</h3>
-                            ${detailsHtml ? `<p><strong>Detalhes:</strong></p>${detailsHtml}` : ''}
+                            ${testInfoHtml}
+                            ${detailsList ? `<p><strong>Detalhes:</strong></p>${detailsList}` : ''}
                             <span class="responsible"><strong>Responsável:</strong> ${task.responsible}</span>
                         </div>
                     `;
@@ -185,20 +169,15 @@
                         <span class="date">${phase.date}</span>
                         <span class="toggle-icon">></span>
                     </div>
-                    <div class="phase-content">
-                        ${tasksHtml}
-                    </div>
+                    <div class="phase-content">${tasksHtml}</div>
                 `;
                 container.appendChild(phaseDiv);
             });
 
-            // Adiciona a interatividade de clique após renderizar
             const phaseHeaders = document.querySelectorAll('.phase-header');
-            
             phaseHeaders.forEach(header => {
                 header.addEventListener('click', function() {
-                    const phase = this.closest('.phase');
-                    phase.classList.toggle('active');
+                    this.closest('.phase').classList.toggle('active');
                 });
             });
         });
