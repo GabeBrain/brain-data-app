@@ -73,4 +73,4 @@ with tab3:
 with tab4:
     st.subheader("Documento de Referência: Apresentação de Marketing")
     # Chama a nova função para renderizar o PDF
-    render_pdf(file_name="mkt.pdf")
+    render_pdf(file_name="assets/Memorando_Widget_Gravacao.pdf")
