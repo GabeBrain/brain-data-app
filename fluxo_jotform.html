@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plano de Atividades do Projeto</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --color-default: #3498db;      /* Azul para 'Em andamento' */
+            --color-completed: #5b7537;   /* Verde Brain para 'Concluído' */
+        }
         body {
             font-family: 'Roboto', sans-serif;
             margin: 0;
@@ -14,7 +18,7 @@
             color: #333;
             line-height: 1.6;
         }
-
+        
         .container {
             max-width: 900px;
             margin: 0 auto;
@@ -23,25 +27,22 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
-
+        
         h1 {
             color: #2c3e50;
             text-align: center;
             margin-bottom: 40px;
             font-weight: 700;
         }
-
+        
         .phase {
             margin-bottom: 30px;
-            border-left: 5px solid #3498db;
+            /* A cor da borda agora é uma variável CSS */
+            border-left: 5px solid var(--phase-color); 
             padding-left: 20px;
             position: relative;
         }
-
-        .phase:last-child {
-            margin-bottom: 0;
-        }
-
+        .phase:last-child { margin-bottom: 0; }
         .phase-header {
             background-color: #ecf0f1;
             padding: 15px 20px;
@@ -53,44 +54,19 @@
             align-items: center;
             transition: background-color 0.3s ease;
         }
-
-        .phase-header:hover {
-            background-color: #dfe6e9;
-        }
-
+        .phase-header:hover { background-color: #dfe6e9; }
         .phase-header h2 {
             margin: 0;
-            color: #2c3e50;
+            /* A cor do título agora é a variável CSS */
+            color: var(--phase-color); 
             font-size: 1.4em;
             font-weight: 500;
         }
-
-        .date {
-            font-size: 0.9em;
-            color: #7f8c8d;
-            font-weight: 400;
-        }
-
-        .toggle-icon {
-            font-size: 1.5em;
-            color: #34495e;
-            transition: transform 0.3s ease;
-        }
-
-        .phase-content {
-            display: none; /* Esconde o conteúdo por padrão */
-            padding-top: 10px;
-            padding-bottom: 10px;
-        }
-
-        .phase.active .phase-content {
-            display: block; /* Mostra o conteúdo quando ativo */
-        }
-
-        .phase.active .toggle-icon {
-            transform: rotate(90deg);
-        }
-
+        .date { font-size: 0.9em; color: #7f8c8d; font-weight: 400; }
+        .toggle-icon { font-size: 1.5em; color: #34495e; transition: transform 0.3s ease; }
+        .phase-content { display: none; padding: 10px 0; }
+        .phase.active .phase-content { display: block; }
+        .phase.active .toggle-icon { transform: rotate(90deg); }
         .task {
             background-color: #fdfdfd;
             border: 1px solid #e0e0e0;
@@ -99,221 +75,126 @@
             margin-bottom: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
         }
-
+        
         .task h3 {
             margin-top: 0;
             margin-bottom: 10px;
-            color: #3498db;
+            /* A cor do título da tarefa também usa a variável */
+            color: var(--phase-color); 
             font-size: 1.2em;
             font-weight: 500;
         }
-
-        .task p {
-            margin: 5px 0;
-            font-size: 0.95em;
-            color: #555;
-        }
-
-        .task strong {
-            color: #2c3e50;
-        }
-
-        .responsible {
-            font-style: italic;
-            color: #666;
-            margin-top: 10px;
-            display: block;
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                padding: 15px;
-            }
-            h1 {
-                font-size: 1.8em;
-                margin-bottom: 25px;
-            }
-            .phase-header h2 {
-                font-size: 1.2em;
-            }
-            .date {
-                font-size: 0.8em;
-            }
-            .task h3 {
-                font-size: 1.1em;
-            }
-        }
+        .task p { margin: 5px 0; font-size: 0.95em; color: #555; }
+        .task strong { color: #2c3e50; }
+        .responsible { font-style: italic; color: #666; margin-top: 10px; display: block; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="timeline-container">
         <h1>Plano de Atividades do Projeto de Pesquisa</h1>
-
-        <div class="phase" id="phase-1">
-            <div class="phase-header">
-                <h2>Teste do Questionário (Free)</h2>
-                <span class="date">13 de agosto (4ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Criar o questionário padrão dentro do Jotform (versão free)</h3>
-                    <p><strong>Detalhes:</strong></p>
-                    <ul>
-                        <li>Desvios</li>
-                        <li>Imagens (associar imagem à pergunta, mostrar em tela cheia...)</li>
-                        <li>Encerramentos</li>
-                        <li>Códigos das perguntas</li>
-                        <li>Indicação dos ajustes para aprovação com cliente</li>
-                        <li>Exportar em .pdf para aprovação com cliente</li>
-                    </ul>
-                    <span class="responsible"><strong>Responsável:</strong> Gabriel</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-2">
-            <div class="phase-header">
-                <h2>Plano de Implantação</h2>
-                <span class="date">15 de agosto (6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Reunião com Letícia para validar o plano (14h)</h3>
-                    <span class="responsible"><strong>Responsáveis:</strong> Angela, Gabriel e Leandro</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-3">
-            <div class="phase-header">
-                <h2>Assinar Jotform</h2>
-                <span class="date">18 de agosto (2ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Definir o plano para contratar</h3>
-                    <ul>
-                        <li>Definir em qual conta contratar (mesma da free)</li>
-                        <li>Assinar o plano</li>
-                    </ul>
-                    <span class="responsible"><strong>Responsáveis:</strong> Angela e Letícia</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-4">
-            <div class="phase-header">
-                <h2>Teste do Questionário (Pago)</h2>
-                <span class="date">18-22 de agosto (2ª - 6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Avaliar funcionalidades a mais na versão paga, em possibilidades dos planos maiores e no plano empresarial</h3>
-                    <ul>
-                        <li>Limite de elementos</li>
-                        <li>Levantar as necessidades a mais que não estão contempladas na versão paga</li>
-                        <li>Marcar conversa com atendimento do Jotform</li>
-                        <li>Criar MP de cliente para teste real: Tacla, coleta em shopping</li>
-                    </ul>
-                    <span class="responsible"><strong>Responsável:</strong> Gabriel</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-5">
-            <div class="phase-header">
-                <h2>Avaliação do Ambiente de Auditoria</h2>
-                <span class="date">18-22 de agosto (2ª - 6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Análise e Testes do Ambiente</h3>
-                    <ul>
-                        <li>Login de pesquisador</li>
-                        <li>Entrada das respostas offline</li>
-                        <li>API para acompanhamento do campo pelo sistema</li>
-                        <li>Status de aprovação/reprovação da auditoria</li>
-                        <li>Validação de dados (comparação de telefones iguais de respondentes)</li>
-                    </ul>
-                    <span class="responsible"><strong>Responsáveis:</strong> Leandro + Gabriel</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-6">
-            <div class="phase-header">
-                <h2>Programação e Teste de Widget: Gravação de Áudio no Jotform</h2>
-                <span class="date">25-30 de agosto (2ª a 6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Implementação e Testes</h3>
-                    <p><strong>Testes nos shoppings Tacla:</strong> Palladium Curitiba (60 questionários) e Palladium Ponta Grossa (40 questionários), com a pesquisadora Tabata (ela e mais 1 pesquisador) e em PG (2 pesquisadoras da Tabata).</p>
-                    <ul>
-                        <li>Gravação de áudio</li>
-                        <li>Uso offline</li>
-                        <li>Visualização das imagens das perguntas</li>
-                        <li>Georreferenciamento</li>
-                    </ul>
-                    <span class="responsible"><strong>Responsável:</strong> Leandro</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-7">
-            <div class="phase-header">
-                <h2>Teste dos Dados</h2>
-                <span class="date">01-05 de setembro (2ª - 6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Elaboração das Parciais</h3>
-                    <span class="responsible"><strong>Responsável:</strong> Gabriel</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="phase" id="phase-8">
-            <div class="phase-header">
-                <h2>Elaboração do Relatório e Treinamento das Equipes</h2>
-                <span class="date">08-12 de setembro (2ª - 6ª feira)</span>
-                <span class="toggle-icon">></span>
-            </div>
-            <div class="phase-content">
-                <div class="task">
-                    <h3>Atividades Finais</h3>
-                    <ul>
-                        <li>Elaboração do relatório</li>
-                        <li>Treinamento das equipes:
-                            <ul>
-                                <li>Analistas para elaboração de MP</li>
-                                <li>Auditores</li>
-                                <li>Pesquisadores por projeto</li>
-                            </ul>
-                        </li>
-                    </ul>
-                    <span class="responsible"><strong>Responsável:</strong> (Não especificado, considerar como equipe)</span>
-                </div>
-            </div>
-        </div>
-
+        
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const phaseHeaders = document.querySelectorAll('.phase-header');
+        // --- DADOS CENTRALIZADOS DO PROJETO ---
+        const projectPhases = [
+            {
+                title: "Teste do Questionário (Free)",
+                date: "13 de agosto (4ª feira)",
+                status: "completed", // <-- Marcado como concluído
+                tasks: [
+                    { 
+                        title: "Criar o questionário padrão dentro do Jotform (versão free)",
+                        details: [
+                            "Desvios", "Imagens (associar, tela cheia...)", "Encerramentos", 
+                            "Códigos das perguntas", "Indicação de ajustes para aprovação", 
+                            "Exportar em .pdf para aprovação"
+                        ],
+                        responsible: "Gabriel"
+                    }
+                ]
+            },
+            {
+                title: "Plano de Implantação",
+                date: "15 de agosto (6ª feira)",
+                status: "completed", // <-- Marcado como concluído
+                tasks: [
+                    { 
+                        title: "Reunião com Letícia para validar o plano (14h)",
+                        details: [],
+                        responsible: "Angela, Gabriel e Leandro"
+                    }
+                ]
+            },
+            {
+                title: "Assinar Jotform",
+                date: "18 de agosto (2ª feira)",
+                status: "completed", // <-- Marcado como concluído
+                tasks: [
+                    {
+                        title: "Definir o plano para contratar",
+                        details: ["Definir em qual conta contratar", "Assinar o plano"],
+                        responsible: "Angela e Letícia"
+                    }
+                ]
+            },
+            {
+                title: "Teste do Questionário (Pago)",
+                date: "18-22 de agosto (2ª - 6ª feira)",
+                status: "pending", // <-- Marcado como pendente (usará a cor padrão)
+                tasks: [
+                     {
+                        title: "Avaliar funcionalidades da versão paga",
+                        details: [
+                            "Limite de elementos", "Levantar necessidades não contempladas",
+                            "Marcar conversa com atendimento Jotform", "Criar MP de cliente para teste real: Tacla"
+                        ],
+                        responsible: "Gabriel"
+                    }
+                ]
+            },
+            // ... Adicione as outras fases aqui seguindo o mesmo padrão ...
+        ];
 
+        // --- LÓGICA DE RENDERIZAÇÃO ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('timeline-container');
+            
+            projectPhases.forEach(phase => {
+                const phaseColor = phase.status === 'completed' ? 'var(--color-completed)' : 'var(--color-default)';
+                
+                const phaseDiv = document.createElement('div');
+                phaseDiv.className = 'phase';
+                phaseDiv.style.setProperty('--phase-color', phaseColor);
+                
+                let tasksHtml = '';
+                phase.tasks.forEach(task => {
+                    let detailsHtml = task.details.length > 0 ? `<ul>${task.details.map(d => `<li>${d}</li>`).join('')}</ul>` : '';
+                    tasksHtml += `
+                        <div class="task">
+                            <h3>${task.title}</h3>
+                            ${detailsHtml ? `<p><strong>Detalhes:</strong></p>${detailsHtml}` : ''}
+                            <span class="responsible"><strong>Responsável:</strong> ${task.responsible}</span>
+                        </div>
+                    `;
+                });
+
+                phaseDiv.innerHTML = `
+                    <div class="phase-header">
+                        <h2>${phase.title}</h2>
+                        <span class="date">${phase.date}</span>
+                        <span class="toggle-icon">></span>
+                    </div>
+                    <div class="phase-content">
+                        ${tasksHtml}
+                    </div>
+                `;
+                container.appendChild(phaseDiv);
+            });
+
+            // Adiciona a interatividade de clique após renderizar
+            const phaseHeaders = document.querySelectorAll('.phase-header');
+            
             phaseHeaders.forEach(header => {
                 header.addEventListener('click', function() {
                     const phase = this.closest('.phase');
