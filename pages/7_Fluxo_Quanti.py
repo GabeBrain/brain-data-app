@@ -15,7 +15,7 @@ st.markdown(
 )
 
 # --- Criação das Abas para cada Visualização ---
-tab1, tab2 = st.tabs(["Visão Vertical (Kanban com Filtros)", "Visão Horizontal (Timeline)"])
+tab1, tab2 = st.tabs(["Visão Kanban com Filtros", "Visão Vertical de Timeline"])
 
 # --- Conteúdo da Aba 1: Fluxo Vertical com Filtros ---
 with tab1:
