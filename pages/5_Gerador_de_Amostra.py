@@ -76,16 +76,38 @@ with st.container(border=True):
         start_date, end_date = None, None
         col_f1.warning("Não há dados de data para filtrar.")
     idade_range = col_f2.slider("Faixa Etária desejada:", 18, 100, (21, 71))
+    
+    # --- NOVA SEÇÃO: FILTROS DE PROJETO ---
+    st.subheader("Filtros de Projeto (Prioridade 0)")
+    lista_projetos = sorted(df_analytics['research_name'].unique())
+    
+    col_p0_1, col_p0_2 = st.columns(2)
+    with col_p0_1:
+        projetos_incluir = st.multiselect(
+            "Garantir Inclusão (Amostra-Core):",
+            options=lista_projetos,
+            default=[],
+            help="Respondentes destes projetos SERÃO incluídos, furando a hierarquia. O restante da amostra será construído ao redor deles."
+        )
+    with col_p0_2:
+        projetos_excluir = st.multiselect(
+            "Garantir Exclusão:",
+            options=lista_projetos,
+            default=[],
+            help="Respondentes destes projetos NUNCA serão incluídos na amostra."
+        )
+    # --- FIM DA NOVA SEÇÃO ---
+    
     st.subheader("Ponderação da Amostra (%)")
     col_p1, col_p2, col_p3 = st.columns(3)
     with col_p1:
         st.write("**Região**")
         regiao_pesos = {
-            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 35, 5),
+            'Sudeste': st.slider("Região Sudeste (%)", 0, 100, 30, 5),
             'Nordeste': st.slider("Nordeste (%)", 0, 100, 30, 5),
             'Sul': st.slider("Sul (%)", 0, 100, 25, 5),
             'Centro-Oeste': st.slider("Centro-Oeste (%)", 0, 100, 10, 5),
-            'Norte': st.slider("Norte (%)", 0, 100, 0, 5)
+            'Norte': st.slider("Norte (%)", 0, 100, 5, 5)
         }
         soma_regiao = sum(regiao_pesos.values())
         if soma_regiao == 100: st.success(f"Total Região: {soma_regiao}%")
@@ -127,31 +149,32 @@ with st.container(border=True):
     if st.button("🔍 Analisar Viabilidade e Gerar Amostras",
                  disabled=not parametros_validos):
         with st.spinner("Analisando e gerando amostra hierárquica..."):
-            # Etapa 1: Filtragem Inicial (sem alterações)
+            
+            # --- Etapa 1: Filtragem Inicial (com Exclusão) ---
             df_base_filtrada = pd.DataFrame()
             if start_date and end_date:
-                df_base_filtrada = df_analytics[
-                    (df_analytics['data_pesquisa'].dt.date >= start_date)
-                    & (df_analytics['data_pesquisa'].dt.date <= end_date) &
-                    (df_analytics['idade_numerica'] >= idade_range[0]) &
-                    (df_analytics['idade_numerica'] <= idade_range[1])].copy()
+                mask_data = (df_analytics['data_pesquisa'].dt.date >= start_date) & \
+                            (df_analytics['data_pesquisa'].dt.date <= end_date)
+                mask_idade = (df_analytics['idade_numerica'] >= idade_range[0]) & \
+                             (df_analytics['idade_numerica'] <= idade_range[1])
+                mask_excluir = (~df_analytics['research_name'].isin(projetos_excluir))
+                
+                df_base_filtrada = df_analytics[mask_data & mask_idade & mask_excluir].copy()
 
             if df_base_filtrada.empty:
                 st.warning("Nenhum dado encontrado para os filtros de base.")
                 st.session_state.analysis_report = None
             else:
-                # Etapa 2: Análise de Viabilidade (continua a mesma para gerar o relatório)
+                # --- Etapa 2: Análise de Viabilidade (sobre o pool filtrado) ---
                 analysis_results = []
                 for param_name, (col_name, weights) in {
                         'Região': ('regiao', regiao_pesos),
-                        'Faixa de Renda':
-                    ('renda_macro_faixa', renda_faixas_macro),
+                        'Faixa de Renda': ('renda_macro_faixa', renda_faixas_macro),
                         'Localidade': ('localidade', localidade_pesos)
                 }.items():
                     for category, pct in weights.items():
                         target_n = int(sample_size * (pct / 100.0))
-                        available_n = len(df_base_filtrada[
-                            df_base_filtrada[col_name] == category])
+                        available_n = len(df_base_filtrada[df_base_filtrada[col_name] == category])
                         analysis_results.append({
                             "Parâmetro": param_name,
                             "Categoria": category,
@@ -160,122 +183,114 @@ with st.container(border=True):
                         })
                 report_df = pd.DataFrame(analysis_results)
 
-                # --- NOVA LÓGICA DE AMOSTRAGEM HIERÁRQUICA ---
-                n_solicitado = min(sample_size, len(df_base_filtrada))
+                # --- NOVA LÓGICA DE AMOSTRAGEM HIERÁRQUICA COM AMOSTRA-CORE ---
 
-                # ESTÁGIO 1: Garantir as cotas de RENDA primeiro
-                indices_por_renda = set()
-                df_restante = df_base_filtrada.copy()
+                # --- Etapa 3: Separar a Amostra-Core ---
+                core_mask = df_base_filtrada['research_name'].isin(projetos_incluir)
+                df_core_sample = df_base_filtrada[core_mask]
+                indices_core = set(df_core_sample.index)
+                
+                # --- Etapa 4: Definir o Pool de Amostragem ---
+                df_pool_para_amostra = df_base_filtrada.drop(indices_core)
+                
+                n_total_necessario = sample_size
+                n_core = len(indices_core)
+                n_solicitado_hierarquico = max(0, n_total_necessario - n_core)
 
-                for renda, pct in renda_faixas_macro.items():
-                    if pct > 0:
-                        target_n_renda = int(
-                            round(n_solicitado * (pct / 100.0)))
-                        disponiveis_na_faixa = df_restante[
-                            df_restante['renda_macro_faixa'] == renda]
+                indices_hierarquicos = set()
 
-                        n_a_pegar = min(target_n_renda,
-                                        len(disponiveis_na_faixa))
+                if n_solicitado_hierarquico > 0 and not df_pool_para_amostra.empty:
+                    # --- Etapa 5: Rodar Amostragem Hierárquica no Pool Restante ---
+                    
+                    # ESTÁGIO 5.1: Garantir cotas de RENDA primeiro (no pool)
+                    df_restante_pool = df_pool_para_amostra.copy()
 
-                        if n_a_pegar > 0:
-                            # Dentro da faixa de renda, tentamos balancear por Região e Localidade
-                            sub_amostra_indices = set()
-                            for regiao, pct_regiao in regiao_pesos.items():
-                                for local, pct_local in localidade_pesos.items(
-                                ):
-                                    sub_target_n = int(
-                                        round(n_a_pegar * (pct_regiao / 100) *
-                                              (pct_local / 100)))
+                    for renda, pct in renda_faixas_macro.items():
+                        if pct > 0:
+                            # Calcula o target para o N restante
+                            target_n_renda = int(round(n_solicitado_hierarquico * (pct / 100.0)))
+                            disponiveis_na_faixa = df_restante_pool[df_restante_pool['renda_macro_faixa'] == renda]
+                            n_a_pegar = min(target_n_renda, len(disponiveis_na_faixa))
 
-                                    sub_disponiveis = disponiveis_na_faixa[
-                                        (disponiveis_na_faixa['regiao'] ==
-                                         regiao)
-                                        & (disponiveis_na_faixa['localidade']
-                                           == local)]
+                            if n_a_pegar > 0:
+                                sub_amostra_indices = set()
+                                # Tenta balancear por Região/Localidade dentro da cota de renda
+                                for regiao, pct_regiao in regiao_pesos.items():
+                                    for local, pct_local in localidade_pesos.items():
+                                        sub_target_n = int(round(n_a_pegar * (pct_regiao / 100) * (pct_local / 100)))
+                                        sub_disponiveis = disponiveis_na_faixa[
+                                            (disponiveis_na_faixa['regiao'] == regiao) &
+                                            (disponiveis_na_faixa['localidade'] == local)
+                                        ]
+                                        sub_take_n = min(sub_target_n, len(sub_disponiveis))
+                                        if sub_take_n > 0:
+                                            selecionados = np.random.choice(sub_disponiveis.index, sub_take_n, replace=False)
+                                            sub_amostra_indices.update(selecionados)
+                                
+                                # Preenche o restante para a cota de renda (shortfall interno)
+                                sub_shortfall = n_a_pegar - len(sub_amostra_indices)
+                                if sub_shortfall > 0:
+                                    sub_restantes = disponiveis_na_faixa.index.difference(sub_amostra_indices)
+                                    n_to_fill_sub = min(sub_shortfall, len(sub_restantes))
+                                    if n_to_fill_sub > 0:
+                                        sub_amostra_indices.update(np.random.choice(sub_restantes, n_to_fill_sub, replace=False))
+                                
+                                indices_hierarquicos.update(sub_amostra_indices)
+                                df_restante_pool = df_restante_pool.drop(sub_amostra_indices) # Remove os já selecionados do pool
 
-                                    sub_take_n = min(sub_target_n,
-                                                     len(sub_disponiveis))
-                                    if sub_take_n > 0:
-                                        selecionados = np.random.choice(
-                                            sub_disponiveis.index,
-                                            sub_take_n,
-                                            replace=False)
-                                        sub_amostra_indices.update(
-                                            selecionados)
+                    # ESTÁGIO 5.2: Preencher o shortfall GERAL (no pool)
+                    shortfall_geral = n_solicitado_hierarquico - len(indices_hierarquicos)
+                    if shortfall_geral > 0 and not df_restante_pool.empty:
+                        n_to_fill_geral = min(shortfall_geral, len(df_restante_pool))
+                        if n_to_fill_geral > 0:
+                            indices_hierarquicos.update(
+                                np.random.choice(df_restante_pool.index, n_to_fill_geral, replace=False)
+                            )
 
-                            # Preenche o restante para a cota de renda aleatoriamente dentro da faixa
-                            sub_shortfall = n_a_pegar - len(
-                                sub_amostra_indices)
-                            if sub_shortfall > 0:
-                                sub_restantes = disponiveis_na_faixa.index.difference(
-                                    sub_amostra_indices)
-                                n_to_fill_sub = min(sub_shortfall,
-                                                    len(sub_restantes))
-                                if n_to_fill_sub > 0:
-                                    sub_amostra_indices.update(
-                                        np.random.choice(sub_restantes,
-                                                         n_to_fill_sub,
-                                                         replace=False))
+                elif n_core >= n_total_necessario:
+                     st.warning(f"A 'Amostra-Core' selecionada ({n_core} respondentes) "
+                                f"já atinge ou supera o N Solicitado ({n_total_necessario}). "
+                                f"A amostra final conterá apenas o grupo 'core'.")
+                     # Se o core for maior, podemos truncar para o N exato
+                     if n_core > n_total_necessario:
+                         indices_core = set(np.random.choice(list(indices_core), n_total_necessario, replace=False))
 
-                            indices_por_renda.update(sub_amostra_indices)
-                            df_restante = df_restante.drop(
-                                sub_amostra_indices
-                            )  # Remove os já selecionados
 
-                # ESTÁGIO 2: Preencher o shortfall GERAL
-                shortfall_geral = n_solicitado - len(indices_por_renda)
-                if shortfall_geral > 0:
-                    # O df_restante agora contém todos os respondentes não selecionados
-                    n_to_fill_geral = min(shortfall_geral, len(df_restante))
-                    if n_to_fill_geral > 0:
-                        indices_por_renda.update(
-                            np.random.choice(df_restante.index,
-                                             n_to_fill_geral,
-                                             replace=False))
-
-                # Cria a amostra final (Amostra com N Solicitado)
-                amostra_final_df = df_base_filtrada.loc[list(
-                    indices_por_renda)].copy()
-
-                # A lógica da Amostra Proporcional Ideal (a segunda amostra) não muda
-                strata_combinations = list(
-                    itertools.product(regiao_pesos.keys(),
-                                      renda_faixas_macro.keys(),
-                                      localidade_pesos.keys()))
+                # --- Etapa 6: União da Amostra Final ---
+                indices_finais = indices_core.union(indices_hierarquicos)
+                amostra_final_df = df_base_filtrada.loc[list(indices_finais)].copy()
+                
+                # --- Lógica da Amostra Proporcional (não muda) ---
+                # Ela continua rodando sobre a df_base_filtrada para o relatório de coleta
+                strata_combinations = list(itertools.product(regiao_pesos.keys(), renda_faixas_macro.keys(), localidade_pesos.keys()))
                 strata_plan = []
+                n_base_proporcional = sample_size # Usamos o sample_size original para o plano ideal
+                
                 for combo in strata_combinations:
-                    target_pct = (regiao_pesos[combo[0]] / 100) * (
-                        renda_faixas_macro[combo[1]] /
-                        100) * (localidade_pesos[combo[2]] / 100)
-                    mask = (df_base_filtrada['regiao'] == combo[0]) & (
-                        df_base_filtrada['renda_macro_faixa'] == combo[1]) & (
-                            df_base_filtrada['localidade'] == combo[2])
+                    target_pct = (regiao_pesos[combo[0]] / 100) * (renda_faixas_macro[combo[1]] / 100) * (localidade_pesos[combo[2]] / 100)
+                    mask = (df_base_filtrada['regiao'] == combo[0]) & \
+                           (df_base_filtrada['renda_macro_faixa'] == combo[1]) & \
+                           (df_base_filtrada['localidade'] == combo[2])
                     available_n = mask.sum()
                     strata_plan.append({
-                        "combo":
-                        combo,
-                        "target_n":
-                        target_pct * n_solicitado,
-                        "available_n":
-                        available_n,
-                        "ratio":
-                        available_n /
-                        (target_pct * n_solicitado) if target_pct > 0 else 1.0,
-                        "mask":
-                        mask
+                        "combo": combo,
+                        "target_n": target_pct * n_base_proporcional,
+                        "available_n": available_n,
+                        "ratio": available_n / (target_pct * n_base_proporcional) if target_pct > 0 else 1.0,
+                        "mask": mask
                     })
-                min_ratio = min(
-                    [s['ratio']
-                     for s in strata_plan if s['target_n'] > 0] + [1.0])
+                
+                min_ratio = min([s['ratio'] for s in strata_plan if s['target_n'] > 0] + [1.0])
                 sampled_indices_prop = []
                 for plan in strata_plan:
                     n_to_sample = int(round(plan['target_n'] * min_ratio))
                     if n_to_sample > 0:
+                        available_indices = df_base_filtrada[plan['mask']].index
+                        n_to_sample = min(n_to_sample, len(available_indices)) # Garante que não tente pegar mais do que o disponível
                         sampled_indices_prop.extend(
-                            df_base_filtrada[plan['mask']].sample(
-                                n=n_to_sample, random_state=42).index.tolist())
-                amostra_proporcional_df = df_base_filtrada.loc[
-                    sampled_indices_prop].copy()
+                            np.random.choice(available_indices, n_to_sample, replace=False)
+                        )
+                amostra_proporcional_df = df_base_filtrada.loc[list(set(sampled_indices_prop))].copy()
 
                 # Salva os resultados no estado da sessão
                 st.session_state.analysis_report = {
