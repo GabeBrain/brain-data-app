@@ -97,6 +97,12 @@ with st.container(border=True):
             help="Respondentes destes projetos NUNCA serão incluídos na amostra."
         )
     # --- FIM DA NOVA SEÇÃO ---
+    projetos_incluir_set = set(projetos_incluir)
+    projetos_excluir_set = set(projetos_excluir)
+    conflitos_projetos = projetos_incluir_set.intersection(projetos_excluir_set)
+    if conflitos_projetos:
+        st.warning(f"Projetos selecionados tanto para Inclusao quanto para Exclusao: {', '.join(conflitos_projetos)}. Dando prioridade a Inclusao e removendo-os da exclusao.")
+        projetos_excluir_set -= conflitos_projetos
     
     st.subheader("Ponderação da Amostra (%)")
     col_p1, col_p2, col_p3 = st.columns(3)
@@ -150,22 +156,28 @@ with st.container(border=True):
                  disabled=not parametros_validos):
         with st.spinner("Analisando e gerando amostra hierárquica..."):
             
-            # --- Etapa 1: Filtragem Inicial (com Exclusão) ---
-            df_base_filtrada = pd.DataFrame()
+            # --- Etapa 1: Filtragem Inicial (com Exclusao) ---
+            mask_data = pd.Series(True, index=df_analytics.index)
             if start_date and end_date:
-                mask_data = (df_analytics['data_pesquisa'].dt.date >= start_date) & \
-                            (df_analytics['data_pesquisa'].dt.date <= end_date)
-                mask_idade = (df_analytics['idade_numerica'] >= idade_range[0]) & \
-                             (df_analytics['idade_numerica'] <= idade_range[1])
-                mask_excluir = (~df_analytics['research_name'].isin(projetos_excluir))
-                
-                df_base_filtrada = df_analytics[mask_data & mask_idade & mask_excluir].copy()
-
-            if df_base_filtrada.empty:
-                st.warning("Nenhum dado encontrado para os filtros de base.")
+                mask_data = (
+                    (df_analytics['data_pesquisa'].dt.date >= start_date) &
+                    (df_analytics['data_pesquisa'].dt.date <= end_date))
+            mask_idade = pd.Series(True, index=df_analytics.index)
+            mask_idade = mask_idade & (
+                (df_analytics['idade_numerica'] >= idade_range[0]) &
+                (df_analytics['idade_numerica'] <= idade_range[1]))
+            mask_excluir = (~df_analytics['research_name'].isin(projetos_excluir_set))
+            core_mask = df_analytics['research_name'].isin(projetos_incluir_set)
+            df_core_sample = df_analytics[core_mask]
+            indices_core = set(df_core_sample.index)
+            df_pool_base = df_analytics[mask_data & mask_idade & mask_excluir].copy()
+            df_pool_para_amostra = df_pool_base.drop(indices_core, errors="ignore")
+            df_para_relatorio = pd.concat([df_core_sample, df_pool_para_amostra])
+            if df_para_relatorio.empty:
+                st.warning("Nenhum dado encontrado apos aplicar filtros e prioridades de projeto.")
                 st.session_state.analysis_report = None
             else:
-                # --- Etapa 2: Análise de Viabilidade (sobre o pool filtrado) ---
+                # --- Etapa 2: Analise de Viabilidade (sobre o pool filtrado) ---
                 analysis_results = []
                 for param_name, (col_name, weights) in {
                         'Região': ('regiao', regiao_pesos),
@@ -174,7 +186,7 @@ with st.container(border=True):
                 }.items():
                     for category, pct in weights.items():
                         target_n = int(sample_size * (pct / 100.0))
-                        available_n = len(df_base_filtrada[df_base_filtrada[col_name] == category])
+                        available_n = len(df_para_relatorio[df_para_relatorio[col_name] == category])
                         analysis_results.append({
                             "Parâmetro": param_name,
                             "Categoria": category,
@@ -185,13 +197,6 @@ with st.container(border=True):
 
                 # --- NOVA LÓGICA DE AMOSTRAGEM HIERÁRQUICA COM AMOSTRA-CORE ---
 
-                # --- Etapa 3: Separar a Amostra-Core ---
-                core_mask = df_base_filtrada['research_name'].isin(projetos_incluir)
-                df_core_sample = df_base_filtrada[core_mask]
-                indices_core = set(df_core_sample.index)
-                
-                # --- Etapa 4: Definir o Pool de Amostragem ---
-                df_pool_para_amostra = df_base_filtrada.drop(indices_core)
                 
                 n_total_necessario = sample_size
                 n_core = len(indices_core)
@@ -248,29 +253,28 @@ with st.container(border=True):
                             )
 
                 elif n_core >= n_total_necessario:
-                     st.warning(f"A 'Amostra-Core' selecionada ({n_core} respondentes) "
-                                f"já atinge ou supera o N Solicitado ({n_total_necessario}). "
-                                f"A amostra final conterá apenas o grupo 'core'.")
-                     # Se o core for maior, podemos truncar para o N exato
-                     if n_core > n_total_necessario:
-                         indices_core = set(np.random.choice(list(indices_core), n_total_necessario, replace=False))
+                    st.warning(f"A 'Amostra-Core' selecionada ({n_core} respondentes) ja atinge ou supera o N Solicitado ({n_total_necessario}). A amostra final contera apenas o grupo 'core'.")
+                    # Se o core for maior, podemos truncar para o N exato
+                    if n_core > n_total_necessario:
+                        indices_core = set(np.random.choice(list(indices_core), n_total_necessario, replace=False))
+
 
 
                 # --- Etapa 6: União da Amostra Final ---
                 indices_finais = indices_core.union(indices_hierarquicos)
-                amostra_final_df = df_base_filtrada.loc[list(indices_finais)].copy()
+                amostra_final_df = df_para_relatorio.loc[list(indices_finais)].copy()
                 
                 # --- Lógica da Amostra Proporcional (não muda) ---
-                # Ela continua rodando sobre a df_base_filtrada para o relatório de coleta
+                # Ela roda sobre a base consolidada (core + pool filtrado) para o relat?rio de coleta
                 strata_combinations = list(itertools.product(regiao_pesos.keys(), renda_faixas_macro.keys(), localidade_pesos.keys()))
                 strata_plan = []
                 n_base_proporcional = sample_size # Usamos o sample_size original para o plano ideal
                 
                 for combo in strata_combinations:
                     target_pct = (regiao_pesos[combo[0]] / 100) * (renda_faixas_macro[combo[1]] / 100) * (localidade_pesos[combo[2]] / 100)
-                    mask = (df_base_filtrada['regiao'] == combo[0]) & \
-                           (df_base_filtrada['renda_macro_faixa'] == combo[1]) & \
-                           (df_base_filtrada['localidade'] == combo[2])
+                    mask = (df_para_relatorio['regiao'] == combo[0]) & \
+                           (df_para_relatorio['renda_macro_faixa'] == combo[1]) & \
+                           (df_para_relatorio['localidade'] == combo[2])
                     available_n = mask.sum()
                     strata_plan.append({
                         "combo": combo,
@@ -285,12 +289,12 @@ with st.container(border=True):
                 for plan in strata_plan:
                     n_to_sample = int(round(plan['target_n'] * min_ratio))
                     if n_to_sample > 0:
-                        available_indices = df_base_filtrada[plan['mask']].index
+                        available_indices = df_para_relatorio[plan['mask']].index
                         n_to_sample = min(n_to_sample, len(available_indices)) # Garante que não tente pegar mais do que o disponível
                         sampled_indices_prop.extend(
                             np.random.choice(available_indices, n_to_sample, replace=False)
                         )
-                amostra_proporcional_df = df_base_filtrada.loc[list(set(sampled_indices_prop))].copy()
+                amostra_proporcional_df = df_para_relatorio.loc[list(set(sampled_indices_prop))].copy()
 
                 # Salva os resultados no estado da sessão
                 st.session_state.analysis_report = {
