@@ -72,7 +72,7 @@ with st.container(border=True):
                                            value=(min_date, max_date),
                                            min_value=min_date,
                                            max_value=max_date)
-        if isinstance(periodo_coleta, tuple):
+        if isinstance(periodo_coleta, (tuple, list)):
             if len(periodo_coleta) == 2:
                 start_date, end_date = periodo_coleta
             elif len(periodo_coleta) == 1:
