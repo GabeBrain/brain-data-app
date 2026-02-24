@@ -68,10 +68,19 @@ with st.container(border=True):
     if not df_analytics_dates.empty:
         min_date = df_analytics_dates['data_pesquisa'].min().date()
         max_date = df_analytics_dates['data_pesquisa'].max().date()
-        start_date, end_date = col_f1.date_input("Período de coleta:",
-                                                 value=(min_date, max_date),
-                                                 min_value=min_date,
-                                                 max_value=max_date)
+        periodo_coleta = col_f1.date_input("Período de coleta:",
+                                           value=(min_date, max_date),
+                                           min_value=min_date,
+                                           max_value=max_date)
+        if isinstance(periodo_coleta, tuple):
+            if len(periodo_coleta) == 2:
+                start_date, end_date = periodo_coleta
+            elif len(periodo_coleta) == 1:
+                start_date = end_date = periodo_coleta[0]
+            else:
+                start_date, end_date = min_date, max_date
+        else:
+            start_date = end_date = periodo_coleta
     else:
         start_date, end_date = None, None
         col_f1.warning("Não há dados de data para filtrar.")
