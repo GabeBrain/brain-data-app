@@ -1,11 +1,26 @@
 import pandas as pd
 import streamlit as st
 from datetime import date
+import numpy as np
+import re
+import unicodedata
 
 from src.database import (
     get_analytics_data,
     get_consolidated_data_for_surveys,
 )
+from src.data_processing import (
+    APAC_AREAS_COLS,
+    AREA_COMUM_CATEGORIAS_ALVO,
+    categorizar_area_comum,
+)
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    SKLEARN_AVAILABLE = True
+except Exception:
+    SKLEARN_AVAILABLE = False
 
 
 st.set_page_config(layout="wide", page_title="Bases Unificadas")
@@ -83,6 +98,96 @@ def clamp_date_range(
         start_date = end_date
 
     return start_date, end_date
+
+
+def normalize_semantic_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    text = ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    ).lower()
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def get_area_category_prototypes() -> dict[str, str]:
+    return {
+        "Áreas Aquáticas | Piscinas": "piscina adulto infantil deck raia solario",
+        "Atividade Física | Academias": "academia fitness musculacao pilates treino",
+        "Serviço": "lavanderia coworking minimercado minimarket mini market restaurante bar bar molhado mercado autonomo pub portaria espaco delivery espaco beleza lounge louge car wash",
+        "Convivência | Ambientes fechados": "salao de festas espaco gourmet sala de jogos brinquedoteca",
+        "Infraestrutura Pet": "pet place pet care dog wash espaco pet",
+        "Áreas Infantis & Familiares": "playground parquinho praca infantil familia criancas",
+        "Convivência | Churrasqueiras": "churrasqueira grill barbecue espaco churrasco",
+        "Atividade Física | Quadras": "quadra poliesportiva beach tenis tenis futsal",
+        "Atividade Física | Caminhada e Ciclovia": "pista caminhada ciclovia corrida cooper bicicletario",
+        "Convivência | Ambientes abertos": "rooftop praca de eventos ambiente externo jardim redario",
+        "Áreas Aquáticas | Sauna e SPA": "sauna spa hidromassagem ofuro relaxamento",
+    }
+
+
+def categorize_area_series_with_semantic_fallback(
+    area_series: pd.Series,
+    min_score: float = 0.12,
+) -> pd.Series:
+    categorized = area_series.apply(categorizar_area_comum)
+
+    if not SKLEARN_AVAILABLE:
+        return categorized
+
+    mask_outros = categorized == "Outros"
+    if not mask_outros.any():
+        return categorized
+
+    outros_text = area_series[mask_outros].astype("string").fillna("")
+    outros_norm = outros_text.apply(normalize_semantic_text)
+    unique_norm = outros_norm[outros_norm != ""].dropna().drop_duplicates()
+    if unique_norm.empty:
+        return categorized
+
+    prototypes = get_area_category_prototypes()
+    categorias_alvo = set(AREA_COMUM_CATEGORIAS_ALVO)
+    categorias_semanticas = [c for c in prototypes.keys() if c in categorias_alvo]
+    if not categorias_semanticas:
+        return categorized
+
+    prototype_texts = [normalize_semantic_text(prototypes[c]) for c in categorias_semanticas]
+    vectorizer = TfidfVectorizer(
+        analyzer="char_wb",
+        ngram_range=(3, 5),
+        min_df=1,
+        max_features=12000,
+    )
+    vectorizer.fit(unique_norm.tolist() + prototype_texts)
+    text_matrix = vectorizer.transform(unique_norm.tolist())
+    proto_matrix = vectorizer.transform(prototype_texts)
+    similarity = cosine_similarity(text_matrix, proto_matrix)
+    best_idx = similarity.argmax(axis=1)
+    best_score = similarity.max(axis=1)
+
+    semantic_map = pd.DataFrame(
+        {
+            "texto_norm_sem": unique_norm.tolist(),
+            "categoria_semantica_sugerida": [categorias_semanticas[i] for i in best_idx],
+            "score_semantico": best_score,
+        }
+    ).set_index("texto_norm_sem")
+
+    outros_df = pd.DataFrame({"texto_norm_sem": outros_norm})
+    outros_df = outros_df.join(semantic_map, on="texto_norm_sem")
+    aceita_auto = (
+        (outros_df["score_semantico"] >= float(min_score))
+        & outros_df["categoria_semantica_sugerida"].isin(categorias_alvo)
+    )
+
+    categorized.loc[outros_df.index] = np.where(
+        aceita_auto,
+        outros_df["categoria_semantica_sugerida"],
+        "Outros",
+    )
+    return categorized
 
 
 def build_unified_dataframe(
@@ -187,6 +292,13 @@ def build_unified_dataframe(
             final_df["FE2P10"]
         )
 
+    # Mantem colunas APAC originais e adiciona colunas categorizadas com fallback semantico.
+    area_cols_present = [col for col in APAC_AREAS_COLS if col in final_df.columns]
+    for area_col in area_cols_present:
+        final_df[f"{area_col}_categorizadas"] = categorize_area_series_with_semantic_fallback(
+            final_df[area_col]
+        )
+
     drop_cols = [
         c
         for c in ["respondent_id_norm", "survey_id_norm", "respondent_id_meta", "survey_id_meta"]
@@ -207,9 +319,43 @@ def build_unified_dataframe(
         "genero",
         "faixa_etaria",
     ]
-    ordered_cols = [c for c in metadata_priority if c in final_df.columns] + [
-        c for c in final_df.columns if c not in metadata_priority
-    ]
+    ordered_priority = [c for c in metadata_priority if c in final_df.columns]
+    non_priority_cols: list[str] = []
+    consumed_non_priority: set[str] = set()
+    area_cols_set = set(APAC_AREAS_COLS)
+
+    for col in final_df.columns:
+        if col in metadata_priority or col in consumed_non_priority:
+            continue
+
+        if col in area_cols_set:
+            non_priority_cols.append(col)
+            consumed_non_priority.add(col)
+
+            cat_col = f"{col}_categorizadas"
+            if cat_col in final_df.columns and cat_col not in consumed_non_priority:
+                non_priority_cols.append(cat_col)
+                consumed_non_priority.add(cat_col)
+            continue
+
+        if col.endswith("_categorizadas"):
+            base_col = col[: -len("_categorizadas")]
+            if (
+                base_col in area_cols_set
+                and base_col in final_df.columns
+            ):
+                # Ja sera posicionado junto da coluna APAC original.
+                consumed_non_priority.add(col)
+                continue
+
+        non_priority_cols.append(col)
+        consumed_non_priority.add(col)
+
+    for col in final_df.columns:
+        if col not in metadata_priority and col not in consumed_non_priority:
+            non_priority_cols.append(col)
+
+    ordered_cols = ordered_priority + non_priority_cols
     final_df = final_df[ordered_cols]
 
     return final_df, base_long, None, None
