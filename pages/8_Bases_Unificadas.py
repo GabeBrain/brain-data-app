@@ -30,7 +30,7 @@ st.set_page_config(layout="wide", page_title="Bases Unificadas")
 st.logo("assets/logoBrain.png")
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner="Preparando bases unificadas...")
 def load_analytics_data() -> pd.DataFrame:
     df = get_analytics_data()
     if df.empty:
@@ -41,14 +41,14 @@ def load_analytics_data() -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner="Preparando bases unificadas...")
 def load_consolidated_data_for_surveys(survey_ids: tuple[int, ...]) -> pd.DataFrame:
     if not survey_ids:
         return pd.DataFrame()
     return get_consolidated_data_for_surveys(list(survey_ids))
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def convert_df_to_excel(df_to_convert: pd.DataFrame) -> bytes:
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -160,7 +160,10 @@ def build_exportable_df_with_question_row(df: pd.DataFrame) -> pd.DataFrame:
 
     first_row = {col: get_question_text_for_code(col) for col in df.columns}
     first_row_df = pd.DataFrame([first_row])
-    return pd.concat([first_row_df, df], ignore_index=True)
+    export_df = pd.concat([first_row_df, df], ignore_index=True)
+    export_df = export_df.astype("object").where(pd.notna(export_df), "-")
+    export_df = export_df.replace(r"^\s*$", "-", regex=True)
+    return export_df
 
 
 def build_normalized_keys(df: pd.DataFrame) -> pd.DataFrame:
