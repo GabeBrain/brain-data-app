@@ -66,13 +66,14 @@ def get_category_prototypes() -> dict[str, str]:
     return {
         "Áreas Aquáticas | Piscinas": "piscina adulto infantil deck raia solario",
         "Atividade Física | Academias": "academia fitness musculacao pilates treino",
-        "Convivência | Ambientes fechados": "salao de festas espaco gourmet sala de jogos brinquedoteca coworking",
+        "Serviço": "lavanderia coworking minimercado minimarket mini market restaurante bar bar molhado mercado autonomo pub portaria espaco delivery espaco beleza lounge louge car wash",
+        "Convivência | Ambientes fechados": "salao de festas espaco gourmet sala de jogos brinquedoteca",
         "Infraestrutura Pet": "pet place pet care dog wash espaco pet",
         "Áreas Infantis & Familiares": "playground parquinho praca infantil familia criancas",
         "Convivência | Churrasqueiras": "churrasqueira grill barbecue espaco churrasco",
         "Atividade Física | Quadras": "quadra poliesportiva beach tenis tenis futsal",
-        "Atividade Física | Caminhada e Ciclovia": "pista caminhada ciclovia corrida cooper",
-        "Convivência | Ambientes abertos": "rooftop praca de eventos lounge externo jardim redario",
+        "Atividade Física | Caminhada e Ciclovia": "pista caminhada ciclovia corrida cooper bicicletario",
+        "Convivência | Ambientes abertos": "rooftop praca de eventos ambiente externo jardim redario",
         "Áreas Aquáticas | Sauna e SPA": "sauna spa hidromassagem ofuro relaxamento",
     }
 

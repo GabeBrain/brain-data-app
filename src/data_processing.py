@@ -703,6 +703,7 @@ APAC_AREAS_COLS = [
 AREA_COMUM_CATEGORIAS_ALVO = [
     "Áreas Aquáticas | Piscinas",
     "Atividade Física | Academias",
+    "Serviço",
     "Convivência | Ambientes fechados",
     "Infraestrutura Pet",
     "Áreas Infantis & Familiares",
@@ -739,6 +740,23 @@ def categorizar_area_comum(valor: str) -> str:
         "quadra de beach tenis": "Atividade Física | Quadras",
         "pista de caminhada": "Atividade Física | Caminhada e Ciclovia",
         "ciclovia": "Atividade Física | Caminhada e Ciclovia",
+        "bicicletario": "Atividade Física | Caminhada e Ciclovia",
+        "lavanderia": "Serviço",
+        "coworking": "Serviço",
+        "minimercado": "Serviço",
+        "minimarket": "Serviço",
+        "mini market": "Serviço",
+        "restaurante": "Serviço",
+        "bar": "Serviço",
+        "bar molhado": "Serviço",
+        "mercado autonomo": "Serviço",
+        "pub": "Serviço",
+        "portaria": "Serviço",
+        "espaco delivery": "Serviço",
+        "espaco beleza": "Serviço",
+        "lounge": "Serviço",
+        "louge": "Serviço",
+        "car wash": "Serviço",
         "salao de festas": "Convivência | Ambientes fechados",
         "espaco gourmet": "Convivência | Ambientes fechados",
         "sala de jogos": "Convivência | Ambientes fechados",
@@ -771,8 +789,27 @@ def categorizar_area_comum(valor: str) -> str:
         return "Atividade Física | Academias"
     if "quadra" in texto or "beach tenis" in texto:
         return "Atividade Física | Quadras"
-    if "ciclovia" in texto or "caminhada" in texto or "cooper" in texto:
+    if "ciclovia" in texto or "caminhada" in texto or "cooper" in texto or "bicicletario" in texto:
         return "Atividade Física | Caminhada e Ciclovia"
+    if (
+        "lavanderia" in texto
+        or "coworking" in texto
+        or "minimercado" in texto
+        or "minimarket" in texto
+        or "mini market" in texto
+        or "restaurante" in texto
+        or "bar molhado" in texto
+        or "mercado autonomo" in texto
+        or _has_word(texto, "bar")
+        or _has_word(texto, "pub")
+        or "portaria" in texto
+        or "delivery" in texto
+        or "espaco beleza" in texto
+        or "lounge" in texto
+        or "louge" in texto
+        or "car wash" in texto
+    ):
+        return "Serviço"
     if "pet" in texto:
         return "Infraestrutura Pet"
     if "piscina" in texto:
