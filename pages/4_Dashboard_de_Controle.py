@@ -226,7 +226,7 @@ with st.expander("📍 Ver Densidade Geográfica de Respondentes"):
             HeatMap(heat_data, radius=15).add_to(m)
 
             # Renderiza o mapa no Streamlit
-            st_folium(m, use_container_width=True, height=500)
+            st_folium(m, height=500)
     else:
         st.info("Nenhum dado de geolocalização disponível para a seleção atual.")
 
