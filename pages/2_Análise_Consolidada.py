@@ -37,7 +37,7 @@ else:
     )
     st.bar_chart(chart_df, height=500)
     with st.expander("Ver tabela de dados detalhada do log"):
-        st.dataframe(log_df, use_container_width=True)
+        st.dataframe(log_df, width="stretch")
 
 # --- Bloco Refatorado: Explorador de Dados Interativo ---
 st.header("🔬 Explorador de Dados Consolidados")
@@ -114,7 +114,7 @@ else:
 
     # O expander agora usa o rótulo dinâmico
     with st.expander(f"Ver registros de: {data_label}"):
-        st.dataframe(df_loaded, use_container_width=True)
+        st.dataframe(df_loaded, width="stretch")
 
     st.subheader("Análise de Respostas por Pergunta")
 
@@ -139,7 +139,7 @@ else:
                 with col1:
                     st.write("Tabela de Frequência:")
                     st.dataframe(value_counts,
-                                 use_container_width=True,
+                                 width="stretch",
                                  height=300)
                 with col2:
                     st.write("Gráfico das Respostas Mais Comuns:")

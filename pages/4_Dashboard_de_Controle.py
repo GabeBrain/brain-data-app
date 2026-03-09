@@ -200,7 +200,7 @@ st.markdown("---")
 st.header("Detalhamento das Pesquisas na Seleção")
 if not df_surveys_filtrado.empty:
     colunas_para_exibir = ['research_name', 'collected_count', 'expected_total', 'collected_percentage', 'status']
-    st.dataframe(df_surveys_filtrado[colunas_para_exibir], use_container_width=True, hide_index=True,
+    st.dataframe(df_surveys_filtrado[colunas_para_exibir], width="stretch", hide_index=True,
                  column_config={"collected_percentage": st.column_config.ProgressColumn(
                      "Percentual Coletado", format="%.2f%%", min_value=0, max_value=100,
                  )})

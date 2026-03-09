@@ -181,7 +181,7 @@ else:
     st.info("Nenhuma pesquisa encontrada no banco de dados ainda.")
 surveys_df = get_all_surveys()
 if not surveys_df.empty:
-    st.dataframe(surveys_df, use_container_width=True, hide_index=True)
+    st.dataframe(surveys_df, width="stretch", hide_index=True)
 
 # --- Seção de Atualização Manual de Dados (LÓGICA REFEITA) ---
 st.markdown("---")
@@ -310,7 +310,7 @@ if st.button(
         st.subheader("📊 Resumo da Atualização")
         if processed_surveys_summary:
             summary_df = pd.DataFrame(processed_surveys_summary)
-            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            st.dataframe(summary_df, width="stretch", hide_index=True)
 
         st.markdown(
             f"**Total de Novos Respondentes Adicionados nesta rodada:** `{new_respondents_added_total}`"

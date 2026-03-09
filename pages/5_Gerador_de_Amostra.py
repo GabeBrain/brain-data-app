@@ -365,7 +365,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
         'Desvio'
     ]]
     st.dataframe(df_to_display.style.apply(style_desvio, axis=1),
-                 use_container_width=True,
+                 width="stretch",
                  hide_index=True)
 
     # --- NOVO: Explicação das colunas do relatório ---
@@ -425,7 +425,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                                                 fill_value=0)
                 st.dataframe(matriz_capital.style.background_gradient(
                     cmap='Reds').format("{:.0f}"),
-                             use_container_width=True)
+                             width="stretch")
             else:
                 st.success(
                     "Nenhuma coleta adicional necessária nas capitais para este plano."
@@ -448,7 +448,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                                                  fill_value=0)
                 st.dataframe(matriz_interior.style.background_gradient(
                     cmap='Reds').format("{:.0f}"),
-                             use_container_width=True)
+                             width="stretch")
             else:
                 st.success(
                     "Nenhuma coleta adicional necessária no interior para este plano."
@@ -477,7 +477,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                                                fill_value=0)
             st.dataframe(matriz_prioridade.style.background_gradient(
                 cmap='Reds').format("{:.0f}"),
-                         use_container_width=True)
+                         width="stretch")
     else:
         st.success(
             "🎉 Plano de Coleta Concluído! A base de dados atual já possui todos os perfis necessários para a amostra ideal."
@@ -511,7 +511,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                  'localidade']).size().reset_index(name='Nº de Respondentes')
             st.dataframe(source_summary.sort_values(by='Nº de Respondentes',
                                                     ascending=False),
-                         use_container_width=True,
+                         width="stretch",
                          hide_index=True)
         else:
             st.info("Nenhuma amostra foi gerada para exibir a auditoria.")
@@ -590,7 +590,7 @@ if 'analysis_report' in st.session_state and st.session_state.analysis_report:
                                                  fill_value=0)
                 st.dataframe(matriz_gargalos.style.background_gradient(
                     cmap='Reds').format("{:.0f}"),
-                             use_container_width=True)
+                             width="stretch")
         else:
             with st.spinner("Preparando arquivo..."):
                 df_tratado_prop = amostra_proporcional_df[[

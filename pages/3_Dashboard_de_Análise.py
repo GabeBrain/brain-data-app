@@ -140,7 +140,7 @@ if total_respondentes > 0:
                          x=variavel_principal,
                          color=variavel_cor,
                          title=f"Contagem por '{variavel_principal}'")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         elif tipo_grafico == 'Proporção (Pizza)':
             counts = df_filtrado[variavel_principal].value_counts()
@@ -149,7 +149,7 @@ if total_respondentes > 0:
                          names=counts.index,
                          hole=.3,
                          title=f"Proporção por '{variavel_principal}'")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         elif tipo_grafico == 'Distribuição (Histograma)':
             if pd.api.types.is_numeric_dtype(df_filtrado[variavel_principal]):
@@ -158,7 +158,7 @@ if total_respondentes > 0:
                     x=variavel_principal,
                     nbins=50,
                     title=f"Distribuição de '{variavel_principal}'")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             else:
                 st.warning(
                     f"Histogramas são adequados apenas para variáveis numéricas. '{variavel_principal}' não é numérica."
@@ -179,7 +179,7 @@ if total_respondentes > 0:
                 )
                 fig.update_layout(barmode='stack',
                                   yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             else:
                 st.warning(
                     "Para o gráfico '100% Empilhado', você precisa selecionar uma variável de 'Agrupar por cor'."
@@ -255,7 +255,7 @@ if total_respondentes > 0:
                     else:
                         fig = px.line(df_plot, title=titulo)
                         fig.update_layout(legend_title_text=dimensao_selecionada.replace('_', ' ').title())
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
 
             # --- FIM DO NOVO BLOCO DE CÓDIGO ---
 
@@ -265,4 +265,4 @@ else:
     st.warning("Nenhum respondente encontrado para os filtros selecionados.")
 
 with st.expander("Ver dados detalhados da seleção"):
-    st.dataframe(df_filtrado, use_container_width=True)
+    st.dataframe(df_filtrado, width="stretch")

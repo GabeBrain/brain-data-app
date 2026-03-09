@@ -389,7 +389,7 @@ with st.container(border=True):
             st.caption(
                 "Dica: role horizontalmente na tabela para visualizar todas as colunas."
             )
-            st.dataframe(preview_df.head(30), use_container_width=True)
+            st.dataframe(preview_df.head(30), width="stretch")
 
     if st.button("Gerar base unificada", type="primary"):
         with st.spinner("Aplicando filtros e montando base unificada..."):
@@ -459,7 +459,7 @@ if "bases_unificadas_result" in st.session_state and st.session_state["bases_uni
     st.caption("Formato atual: Largo (1 linha por respondente)")
 
     with st.expander("Ver previa da base final"):
-        st.dataframe(final_df.head(1000), use_container_width=True)
+        st.dataframe(final_df.head(1000), width="stretch")
 
     st.download_button(
         label=f"Baixar base unificada ({len(final_df)} linhas)",
