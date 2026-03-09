@@ -13,7 +13,6 @@ from src.data_processing import (
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.cluster import MiniBatchKMeans
     from sklearn.metrics.pairwise import cosine_similarity
     SKLEARN_AVAILABLE = True
 except Exception:
@@ -78,10 +77,8 @@ def get_category_prototypes() -> dict[str, str]:
     }
 
 
-def run_semantic_clustering_outros(
+def run_semantic_matching_outros(
     outros_df: pd.DataFrame,
-    n_clusters: int,
-    random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if outros_df.empty:
         return pd.DataFrame(), pd.DataFrame()
@@ -101,71 +98,40 @@ def run_semantic_clustering_outros(
         .reset_index()
     )
 
-    if len(unique_texts) < 2:
-        unique_texts["cluster_id"] = 0
-        unique_texts["categoria_semantica_sugerida"] = pd.NA
-        unique_texts["score_semantico"] = 0.0
-        summary = pd.DataFrame(
-            [{
-                "cluster_id": 0,
-                "qtd_linhas": int(unique_texts["qtd_linhas"].sum()),
-                "qtd_textos_unicos": len(unique_texts),
-                "categoria_semantica_sugerida": "Sem sugestao",
-                "score_medio": 0.0,
-                "exemplos": ", ".join(unique_texts["area_resposta_exemplo"].head(5).tolist()),
-            }]
-        )
-        return unique_texts, summary
+    if len(unique_texts) < 1:
+        return pd.DataFrame(), pd.DataFrame()
 
-    n_clusters = max(2, min(n_clusters, len(unique_texts)))
+    prototypes = get_category_prototypes()
+    cat_names = list(prototypes.keys())
+
+    prototype_texts = [normalize_semantic_text(prototypes[c]) for c in cat_names]
+    corpus_fit = unique_texts["texto_norm_sem"].tolist() + prototype_texts
     vectorizer = TfidfVectorizer(
         analyzer="char_wb",
         ngram_range=(3, 5),
         min_df=1,
         max_features=12000,
     )
-    X = vectorizer.fit_transform(unique_texts["texto_norm_sem"].tolist())
-
-    model = MiniBatchKMeans(
-        n_clusters=n_clusters,
-        random_state=random_state,
-        n_init=10,
-        batch_size=1024,
-    )
-    labels = model.fit_predict(X)
-    unique_texts["cluster_id"] = labels
-
-    prototypes = get_category_prototypes()
-    cat_names = list(prototypes.keys())
-    proto_matrix = vectorizer.transform([prototypes[c] for c in cat_names])
-    sim = cosine_similarity(model.cluster_centers_, proto_matrix)
+    vectorizer.fit(corpus_fit)
+    text_matrix = vectorizer.transform(unique_texts["texto_norm_sem"].tolist())
+    proto_matrix = vectorizer.transform(prototype_texts)
+    sim = cosine_similarity(text_matrix, proto_matrix)
     best_idx = sim.argmax(axis=1)
     best_score = sim.max(axis=1)
 
-    cluster_map = pd.DataFrame(
-        {
-            "cluster_id": np.arange(n_clusters),
-            "categoria_semantica_sugerida": [cat_names[i] for i in best_idx],
-            "score_semantico_cluster": best_score,
-        }
-    )
-    unique_texts = unique_texts.merge(cluster_map, on="cluster_id", how="left")
-    unique_texts["score_semantico"] = unique_texts["score_semantico_cluster"]
+    unique_texts["categoria_semantica_sugerida"] = [cat_names[i] for i in best_idx]
+    unique_texts["score_semantico"] = best_score
 
-    summary_rows = []
-    for cid, g in unique_texts.groupby("cluster_id"):
-        exemplos = ", ".join(g.sort_values("qtd_linhas", ascending=False)["area_resposta_exemplo"].head(5).tolist())
-        summary_rows.append(
-            {
-                "cluster_id": int(cid),
-                "qtd_linhas": int(g["qtd_linhas"].sum()),
-                "qtd_textos_unicos": int(len(g)),
-                "categoria_semantica_sugerida": g["categoria_semantica_sugerida"].iloc[0],
-                "score_medio": float(g["score_semantico"].mean()),
-                "exemplos": exemplos,
-            }
+    summary = (
+        unique_texts.groupby("categoria_semantica_sugerida", as_index=False)
+        .agg(
+            qtd_linhas=("qtd_linhas", "sum"),
+            qtd_textos_unicos=("texto_norm_sem", "count"),
+            score_medio=("score_semantico", "mean"),
+            exemplos=("area_resposta_exemplo", lambda s: ", ".join(s.head(5).tolist())),
         )
-    summary = pd.DataFrame(summary_rows).sort_values("qtd_linhas", ascending=False)
+        .sort_values("qtd_linhas", ascending=False)
+    )
     return unique_texts, summary
 
 
@@ -386,48 +352,37 @@ st.download_button(
 )
 
 st.markdown("---")
-st.header("4. Clusterização Semântica dos 'Outros'")
+st.header("4. Classificacao Semantica dos 'Outros'")
 st.markdown(
-    "Agrupa respostas que caíram em 'Outros' por similaridade textual (TF-IDF + cosseno) e sugere categoria por cluster."
+    "Compara cada resposta em 'Outros' diretamente com as categorias-alvo (sem clusters). "
+    "Se o score nao atingir o minimo, permanece em 'Outros'."
 )
 
 outros_base = area_long[area_long["categoria_area_comum"] == "Outros"].copy()
 if outros_base.empty:
-    st.success("Não há registros em 'Outros' para clusterizar.")
+    st.success("Nao ha registros em 'Outros' para classificar semanticamente.")
 else:
     if not SKLEARN_AVAILABLE:
         st.error(
-            "Dependência ausente: instale `scikit-learn` no ambiente para habilitar a clusterização semântica."
+            "Dependencia ausente: instale `scikit-learn` no ambiente para habilitar a classificacao semantica."
         )
     else:
-        c_s1, c_s2 = st.columns(2)
-        with c_s1:
-            suggested_k = max(8, min(80, int(np.sqrt(len(outros_base)))))
-            n_clusters = st.slider(
-                "Número de clusters semânticos",
-                min_value=2,
-                max_value=min(120, max(10, len(outros_base))),
-                value=suggested_k,
-                step=1,
-            )
-        with c_s2:
-            min_score_auto = st.slider(
-                "Score mínimo para aceitar sugestão automática",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.12,
-                step=0.01,
-            )
+        min_score_auto = st.slider(
+            "Score minimo para aceitar sugestao automatica",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.12,
+            step=0.01,
+        )
 
-        if st.button("Rodar clusterização semântica", type="primary"):
-            with st.spinner("Executando vetorização, clusterização e sugestão de categoria..."):
-                map_df, cluster_summary = run_semantic_clustering_outros(
+        if st.button("Rodar classificacao semantica", type="primary"):
+            with st.spinner("Executando comparacao semantica com categorias-alvo..."):
+                map_df, semantic_summary = run_semantic_matching_outros(
                     outros_df=outros_base,
-                    n_clusters=int(n_clusters),
                 )
 
                 if map_df.empty:
-                    st.warning("Não foi possível gerar clusters para os dados atuais.")
+                    st.warning("Nao foi possivel gerar sugestoes para os dados atuais.")
                 else:
                     categorias_alvo = set(AREA_COMUM_CATEGORIAS_ALVO)
                     map_df["categoria_semantica_sugerida"] = map_df["categoria_semantica_sugerida"].where(
@@ -446,7 +401,6 @@ else:
                     mapping_for_join = map_df[
                         [
                             "texto_norm_sem",
-                            "cluster_id",
                             "categoria_semantica_sugerida",
                             "score_semantico",
                             "aceita_auto",
@@ -467,19 +421,19 @@ else:
                     dist_after = area_long_sem["categoria_area_comum_auto"].value_counts(dropna=False).to_frame("depois")
                     dist_compare = dist_before.join(dist_after, how="outer").fillna(0).astype(int)
 
-                    st.subheader("Distribuição por categoria: antes vs depois")
+                    st.subheader("Distribuicao por categoria: antes vs depois")
                     st.dataframe(dist_compare, width="stretch")
 
-                    st.subheader("Resumo dos clusters")
-                    st.dataframe(cluster_summary, width="stretch")
+                    st.subheader("Resumo das sugestoes semanticas")
+                    st.dataframe(semantic_summary, width="stretch")
 
-                    with st.expander("Mapa de textos para cluster e categoria sugerida"):
+                    with st.expander("Mapa de textos para categoria sugerida"):
                         st.dataframe(
-                            map_df.sort_values(["cluster_id", "qtd_linhas"], ascending=[True, False]),
+                            map_df.sort_values(["qtd_linhas", "score_semantico"], ascending=[False, False]),
                             width="stretch",
                         )
 
-                    with st.expander("Base com categoria automática (amostra)"):
+                    with st.expander("Base com categoria automatica (amostra)"):
                         cols_show = [
                             c
                             for c in [
@@ -497,7 +451,7 @@ else:
                         st.dataframe(area_long_sem[cols_show].head(1500), width="stretch")
 
                     st.download_button(
-                        label=f"Baixar resultado semântico ({len(area_long_sem)} linhas)",
+                        label=f"Baixar resultado semantico ({len(area_long_sem)} linhas)",
                         data=convert_df_to_csv(area_long_sem),
                         file_name="teste_tratamentos_areas_semantico.csv",
                         mime="text/csv",
