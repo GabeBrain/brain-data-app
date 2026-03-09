@@ -39,7 +39,6 @@ def get_filter_options(df: pd.DataFrame, column: str) -> list[str]:
 def build_unified_dataframe(
     filtered_analytics: pd.DataFrame,
     df_consolidated: pd.DataFrame,
-    output_format: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str | None]:
     req_cons_cols = {"respondent_id", "survey_id", "question_code", "answer_value"}
     if not req_cons_cols.issubset(df_consolidated.columns):
@@ -62,27 +61,20 @@ def build_unified_dataframe(
     if base_long.empty:
         return pd.DataFrame(), base_long, None
 
-    if output_format == "Largo (1 linha por respondente)":
-        output_wide = (
-            base_long.pivot_table(
-                index=["respondent_id", "survey_id"],
-                columns="question_code",
-                values="answer_value",
-                aggfunc="first",
-            )
-            .reset_index()
+    output_wide = (
+        base_long.pivot_table(
+            index=["respondent_id", "survey_id"],
+            columns="question_code",
+            values="answer_value",
+            aggfunc="first",
         )
-        final_df = output_wide.merge(
-            filtered_analytics,
-            on=["respondent_id", "survey_id"],
-            how="left",
-        )
-    else:
-        final_df = base_long.merge(
-            filtered_analytics,
-            on=["respondent_id", "survey_id"],
-            how="left",
-        )
+        .reset_index()
+    )
+    final_df = output_wide.merge(
+        filtered_analytics,
+        on=["respondent_id", "survey_id"],
+        how="left",
+    )
 
     metadata_priority = [
         "respondent_id",
@@ -181,7 +173,7 @@ if not valid_dates.empty:
     )
 
 with st.container(border=True):
-    col_f1, col_f2, col_f3 = st.columns(3)
+    col_f1, col_f2 = st.columns(2)
 
     with col_f1:
         selected_years_input = st.multiselect(
@@ -256,15 +248,6 @@ with st.container(border=True):
             elif use_exact_range:
                 st.info("Sem datas validas para aplicar faixa exata.")
 
-    with col_f3:
-        output_format = st.selectbox(
-            "Formato da base exportada",
-            options=[
-                "Largo (1 linha por respondente)",
-                "Longo (1 linha por resposta)",
-            ],
-        )
-
     col_f4, col_f5, col_f6 = st.columns(3)
     with col_f4:
         selected_regions = st.multiselect(
@@ -307,7 +290,6 @@ with st.container(border=True):
         preview_df, _, preview_error = build_unified_dataframe(
             filtered_analytics=filtered_preview,
             df_consolidated=df_consolidated_preview,
-            output_format=output_format,
         )
         if preview_error:
             st.error(preview_error)
@@ -350,7 +332,6 @@ with st.container(border=True):
                     final_df, base_long, build_error = build_unified_dataframe(
                         filtered_analytics=filtered_analytics,
                         df_consolidated=df_consolidated,
-                        output_format=output_format,
                     )
                     if build_error:
                         st.session_state["bases_unificadas_result"] = None
@@ -365,7 +346,6 @@ with st.container(border=True):
                             "df": final_df,
                             "filtered_analytics": filtered_analytics,
                             "base_long": base_long,
-                            "format": output_format,
                         }
 
 if "bases_unificadas_result" in st.session_state and st.session_state["bases_unificadas_result"]:
@@ -385,7 +365,7 @@ if "bases_unificadas_result" in st.session_state and st.session_state["bases_uni
     col_kpi2.metric("Respostas consolidadas", value=f"{len(base_long):,}")
     col_kpi3.metric("Linhas na base final", value=f"{len(final_df):,}")
 
-    st.caption(f"Formato atual: {result['format']}")
+    st.caption("Formato atual: Largo (1 linha por respondente)")
 
     with st.expander("Ver previa da base final"):
         st.dataframe(final_df.head(1000), use_container_width=True)
