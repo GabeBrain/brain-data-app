@@ -147,7 +147,7 @@ def get_question_text_for_code(code: str) -> str:
             if alias_clean and alias_clean != code:
                 return alias_clean
 
-    return ""
+    return code
 
 
 def build_exportable_df_with_question_row(df: pd.DataFrame) -> pd.DataFrame:
@@ -698,7 +698,7 @@ with st.container(border=True):
             "exact_start_date": exact_start_date,
             "exact_end_date": exact_end_date,
         }
-        st.session_state["bases_unificadas_result"] = None
+        st.session_state["bases_unificadas_export_payload"] = None
 
         filtered_preview = apply_base_filters(
             df=df_analytics,
@@ -719,8 +719,15 @@ with st.container(border=True):
             "preview_total_cols": 0,
             "preview_limited": len(filtered_preview) > 500,
         }
+        export_payload = {
+            "status": "info",
+            "message": "Nenhuma linha consolidada encontrada para os filtros atuais.",
+            "export_df": pd.DataFrame(),
+            "interviews_count": 0,
+        }
         if filtered_preview.empty:
             preview_payload["message"] = "Nenhum registro encontrado para os filtros aplicados."
+            export_payload["message"] = "Nenhum registro encontrado para os filtros aplicados."
         else:
             survey_ids_preview = get_filtered_survey_ids(filtered_preview)
             df_consolidated_preview = load_consolidated_data_for_surveys(
@@ -731,6 +738,8 @@ with st.container(border=True):
                 preview_payload["message"] = (
                     "Nenhum dado consolidado encontrado para as surveys da selecao atual."
                 )
+                export_payload["status"] = "warning"
+                export_payload["message"] = preview_payload["message"]
             else:
                 preview_df, _, preview_error, preview_info = build_unified_dataframe(
                     filtered_analytics=filtered_preview,
@@ -755,9 +764,31 @@ with st.container(border=True):
                     preview_payload["preview_total_rows"] = len(preview_df)
                     preview_payload["preview_total_cols"] = preview_df.shape[1]
 
-        st.session_state["bases_unificadas_preview_payload"] = preview_payload
+                full_df, _, full_error, full_info = build_unified_dataframe(
+                    filtered_analytics=filtered_preview,
+                    df_consolidated=df_consolidated_preview,
+                )
+                if full_error:
+                    export_payload["status"] = "error"
+                    export_payload["message"] = full_error
+                elif full_info:
+                    export_payload["status"] = "warning"
+                    export_payload["message"] = full_info
+                elif full_df.empty:
+                    export_payload["status"] = "info"
+                    export_payload["message"] = (
+                        "Nenhuma linha consolidada encontrada para os filtros atuais."
+                    )
+                else:
+                    export_payload["status"] = "ok"
+                    export_payload["message"] = ""
+                    export_payload["interviews_count"] = len(full_df)
+                    export_payload["export_df"] = build_exportable_df_with_question_row(full_df)
 
-    st.markdown("##### Previa da base unificada (head 30)")
+        st.session_state["bases_unificadas_preview_payload"] = preview_payload
+        st.session_state["bases_unificadas_export_payload"] = export_payload
+
+    st.markdown("##### Previa da base unificada")
     preview_payload = st.session_state.get("bases_unificadas_preview_payload")
     if not preview_payload:
         st.info("Ajuste os filtros e clique em 'Aplicar filtros' para carregar a previa.")
@@ -789,92 +820,25 @@ with st.container(border=True):
             )
             st.dataframe(preview_payload.get("preview_head", pd.DataFrame()), width="stretch")
 
-    if st.button("Gerar base unificada", type="primary"):
-        applied = st.session_state.get("bases_unificadas_applied_filters")
-        if not applied or "bases_unificadas_preview_payload" not in st.session_state:
-            st.warning("Clique em 'Aplicar filtros' antes de gerar a base unificada.")
-        else:
-            with st.spinner("Aplicando filtros e montando base unificada..."):
-                filtered_analytics = apply_base_filters(
-                    df=df_analytics,
-                    exact_start_date=applied.get("exact_start_date"),
-                    exact_end_date=applied.get("exact_end_date"),
-                    selected_years=applied.get("selected_years", years_options),
-                    selected_regions=applied.get("selected_regions", regions_options),
-                    selected_income=applied.get("selected_income", income_options),
-                    selected_localidade=applied.get("selected_localidade", localidade_options),
-                ).drop_duplicates(subset=["respondent_id", "survey_id"])
-
-                if filtered_analytics.empty:
-                    st.session_state["bases_unificadas_result"] = None
-                    st.warning("Nenhum registro encontrado para os filtros escolhidos.")
-                else:
-                    survey_ids_selected = get_filtered_survey_ids(filtered_analytics)
-                    df_consolidated = load_consolidated_data_for_surveys(
-                        tuple(survey_ids_selected)
-                    )
-
-                    if df_consolidated.empty:
-                        st.session_state["bases_unificadas_result"] = None
-                        st.warning(
-                            "Nenhum dado consolidado encontrado para as surveys dos filtros escolhidos."
-                        )
-                    else:
-                        final_df, base_long, build_error, build_info = build_unified_dataframe(
-                            filtered_analytics=filtered_analytics,
-                            df_consolidated=df_consolidated,
-                        )
-                        if build_error:
-                            st.session_state["bases_unificadas_result"] = None
-                            st.error(build_error)
-                        elif build_info:
-                            st.session_state["bases_unificadas_result"] = None
-                            st.warning(build_info)
-                        elif final_df.empty:
-                            st.session_state["bases_unificadas_result"] = None
-                            st.warning(
-                                "Nenhuma linha consolidada encontrada para os filtros escolhidos."
-                            )
-                        else:
-                            st.session_state["bases_unificadas_result"] = {
-                                "df": final_df,
-                                "filtered_analytics": filtered_analytics,
-                                "base_long": base_long,
-                            }
-
-if "bases_unificadas_result" in st.session_state and st.session_state["bases_unificadas_result"]:
-    result = st.session_state["bases_unificadas_result"]
-    final_df = result["df"]
-    exportable_df = build_exportable_df_with_question_row(final_df)
-    filtered_analytics = result["filtered_analytics"]
-    base_long = result["base_long"]
-
-    st.markdown("---")
-    st.header("2. Resultado da unificacao")
-
-    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-    col_kpi1.metric(
-        "Respondentes unicos",
-        value=f"{filtered_analytics[['respondent_id', 'survey_id']].drop_duplicates().shape[0]:,}",
-    )
-    col_kpi2.metric("Respostas consolidadas", value=f"{len(base_long):,}")
-    col_kpi3.metric("Linhas na base final", value=f"{len(final_df):,}")
-
-    st.caption("Formato atual: Largo (1 linha por respondente)")
-
-    st.subheader("Tabela completa da base unificada")
-    st.dataframe(final_df, width="stretch", height=500)
-
-    st.subheader("Tabela final exportavel (linha 1 = texto da pergunta)")
-    st.dataframe(exportable_df, width="stretch", height=500)
-
-    st.subheader("Tabela analytics da selecao de filtros")
-    st.dataframe(filtered_analytics, width="stretch", height=500)
-
-    st.download_button(
-        label=f"Baixar base unificada ({len(final_df)} entrevistas + 1 linha de perguntas)",
-        data=convert_df_to_csv(exportable_df),
-        file_name="base_unificada_filtrada.csv",
-        mime="text/csv",
-        type="primary",
-    )
+    export_payload = st.session_state.get("bases_unificadas_export_payload")
+    if not export_payload:
+        st.info("Clique em 'Aplicar filtros' para habilitar o download da base.")
+    else:
+        export_status = export_payload.get("status")
+        export_message = export_payload.get("message", "")
+        if export_status == "error":
+            st.error(export_message)
+        elif export_status == "warning":
+            st.warning(export_message)
+        elif export_status == "info" and export_message:
+            st.info(export_message)
+        elif export_status == "ok":
+            export_df = export_payload.get("export_df", pd.DataFrame())
+            interviews_count = int(export_payload.get("interviews_count", 0))
+            st.download_button(
+                label=f"Baixar base unificada ({interviews_count:,} entrevistas)",
+                data=convert_df_to_csv(export_df),
+                file_name="base_unificada_filtrada.csv",
+                mime="text/csv",
+                type="primary",
+            )
