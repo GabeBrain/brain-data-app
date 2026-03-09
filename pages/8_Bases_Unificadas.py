@@ -178,6 +178,15 @@ def build_unified_dataframe(
         suffixes=("", "_meta"),
     )
 
+    # Garante a presença do texto original de renda na base unificada.
+    # Se a coluna tratada não existir/estiver nula, usa FE2P10 como fallback.
+    if "renda_texto_original" not in final_df.columns and "FE2P10" in final_df.columns:
+        final_df["renda_texto_original"] = final_df["FE2P10"]
+    elif "renda_texto_original" in final_df.columns and "FE2P10" in final_df.columns:
+        final_df["renda_texto_original"] = final_df["renda_texto_original"].fillna(
+            final_df["FE2P10"]
+        )
+
     drop_cols = [
         c
         for c in ["respondent_id_norm", "survey_id_norm", "respondent_id_meta", "survey_id_meta"]
@@ -191,6 +200,7 @@ def build_unified_dataframe(
         "survey_id",
         "research_name",
         "data_pesquisa",
+        "renda_texto_original",
         "regiao",
         "localidade",
         "renda_macro_faixa",
