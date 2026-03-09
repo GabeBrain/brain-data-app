@@ -3,7 +3,10 @@ import streamlit as st
 
 from src.database import get_analytics_data
 from src.data_processing import (
+    APAC_AREAS_COLS,
+    AREA_COMUM_CATEGORIAS_ALVO,
     calcular_media_faixa,
+    categorizar_area_comum,
     classificar_faixa_antiga,
     map_renda_to_macro_faixa,
 )
@@ -205,5 +208,88 @@ else:
         label=f"Baixar divergencias ({len(div_df)} linhas)",
         data=convert_df_to_csv(div_df[cols_div]),
         file_name="teste_tratamentos_divergencias_renda.csv",
+        mime="text/csv",
+    )
+
+st.markdown("---")
+st.header("4. Áreas Comuns (APAC9P85_1..5)")
+st.markdown(
+    "Classificação das respostas de áreas comuns nas categorias-alvo para validação antes de levar para exportação da Bases Unificadas."
+)
+
+area_cols_present = [c for c in APAC_AREAS_COLS if c in df_filtered.columns]
+if len(area_cols_present) < 1:
+    st.warning("Nenhuma coluna APAC9P85_1..5 encontrada na base filtrada.")
+else:
+    id_cols = [
+        c
+        for c in ["respondent_id", "survey_id", "research_name", "data_pesquisa"]
+        if c in df_filtered.columns
+    ]
+    area_long = df_filtered[id_cols + area_cols_present].melt(
+        id_vars=id_cols,
+        value_vars=area_cols_present,
+        var_name="pergunta_area",
+        value_name="area_resposta_original",
+    )
+
+    area_long["area_resposta_original"] = (
+        area_long["area_resposta_original"].astype("string").str.strip()
+    )
+    area_long["categoria_area_comum"] = area_long["area_resposta_original"].apply(
+        categorizar_area_comum
+    )
+
+    total_linhas = len(area_long)
+    sem_resposta = (area_long["categoria_area_comum"] == "Sem resposta").sum()
+    outros = (area_long["categoria_area_comum"] == "Outros").sum()
+    categorizadas = total_linhas - sem_resposta - outros
+
+    c_a1, c_a2, c_a3, c_a4 = st.columns(4)
+    c_a1.metric("Respostas APAC analisadas", f"{total_linhas:,}")
+    c_a2.metric("Classificadas", f"{categorizadas:,}")
+    c_a3.metric("Outros", f"{outros:,}")
+    c_a4.metric("Sem resposta", f"{sem_resposta:,}")
+
+    st.caption("Categorias-alvo")
+    st.write(" | ".join(AREA_COMUM_CATEGORIAS_ALVO))
+
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        dist_geral = (
+            area_long["categoria_area_comum"]
+            .value_counts(dropna=False)
+            .rename_axis("categoria")
+            .to_frame("contagem")
+        )
+        st.markdown("**Distribuição geral por categoria**")
+        st.dataframe(dist_geral, width="stretch")
+
+    with col_d2:
+        dist_por_pergunta = pd.crosstab(
+            area_long["pergunta_area"], area_long["categoria_area_comum"]
+        )
+        st.markdown("**Distribuição por pergunta (APAC9P85_1..5)**")
+        st.dataframe(dist_por_pergunta, width="stretch")
+
+    st.subheader("Top respostas originais não mapeadas (Outros)")
+    outros_df = (
+        area_long[area_long["categoria_area_comum"] == "Outros"]["area_resposta_original"]
+        .value_counts()
+        .reset_index()
+    )
+    if outros_df.empty:
+        st.success("Nenhuma resposta caiu em 'Outros'.")
+    else:
+        outros_df.columns = ["area_resposta_original", "contagem"]
+        st.dataframe(outros_df.head(200), width="stretch")
+
+    with st.expander("Ver base longa de áreas classificadas"):
+        st.dataframe(area_long.head(1000), width="stretch")
+
+    st.download_button(
+        label=f"Baixar auditoria de áreas ({len(area_long)} linhas)",
+        data=convert_df_to_csv(area_long),
+        file_name="teste_tratamentos_areas_classificadas.csv",
         mime="text/csv",
     )

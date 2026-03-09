@@ -691,6 +691,105 @@ def map_renda_to_macro_faixa(faixa_padronizada: str) -> str | None:
     return MAPA_RENDA_MACRO.get(faixa_padronizada)
 
 
+# --- 2.5. LÓGICA DE CATEGORIZAÇÃO DE ÁREAS COMUNS (APAC9P85_1..5) ---
+APAC_AREAS_COLS = [
+    "APAC9P85_1",
+    "APAC9P85_2",
+    "APAC9P85_3",
+    "APAC9P85_4",
+    "APAC9P85_5",
+]
+
+AREA_COMUM_CATEGORIAS_ALVO = [
+    "Áreas Aquáticas | Piscinas",
+    "Atividade Física | Academias",
+    "Convivência | Ambientes fechados",
+    "Infraestrutura Pet",
+    "Áreas Infantis & Familiares",
+    "Convivência | Churrasqueiras",
+    "Atividade Física | Quadras",
+    "Atividade Física | Caminhada e Ciclovia",
+    "Convivência | Ambientes abertos",
+    "Áreas Aquáticas | Sauna e SPA",
+]
+
+
+def _normalizar_texto_area(valor: str) -> str:
+    if not isinstance(valor, str):
+        return ""
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', valor)
+        if unicodedata.category(c) != 'Mn'
+    ).lower().strip()
+
+
+def categorizar_area_comum(valor: str) -> str:
+    """
+    Mapeia respostas das colunas APAC9P85_1..5 para as categorias-alvo de áreas comuns.
+    Retorna 'Outros' quando não encontrar regra explícita.
+    """
+    texto = _normalizar_texto_area(valor)
+    if not texto or texto in {"-", "na", "n/a", "none", "nan"}:
+        return "Sem resposta"
+
+    mapa_exato = {
+        "academia": "Atividade Física | Academias",
+        "academia ao ar livre": "Atividade Física | Academias",
+        "quadra poliesportiva": "Atividade Física | Quadras",
+        "quadra de beach tenis": "Atividade Física | Quadras",
+        "pista de caminhada": "Atividade Física | Caminhada e Ciclovia",
+        "ciclovia": "Atividade Física | Caminhada e Ciclovia",
+        "salao de festas": "Convivência | Ambientes fechados",
+        "espaco gourmet": "Convivência | Ambientes fechados",
+        "sala de jogos": "Convivência | Ambientes fechados",
+        "churrasqueira": "Convivência | Churrasqueiras",
+        "churrasqueira com deck/bar": "Convivência | Churrasqueiras",
+        "playground": "Áreas Infantis & Familiares",
+        "parquinho": "Áreas Infantis & Familiares",
+        "praca": "Áreas Infantis & Familiares",
+        "piscina": "Áreas Aquáticas | Piscinas",
+        "piscina adulto e infantil": "Áreas Aquáticas | Piscinas",
+        "piscina adulto": "Áreas Aquáticas | Piscinas",
+        "piscina e deck": "Áreas Aquáticas | Piscinas",
+        "spa": "Áreas Aquáticas | Sauna e SPA",
+        "sauna": "Áreas Aquáticas | Sauna e SPA",
+        "espaco pet": "Infraestrutura Pet",
+        "pet place": "Infraestrutura Pet",
+        "praca de eventos (food truck/ feira organicos/ festa junina, ect)": "Convivência | Ambientes abertos",
+        "rooftop": "Convivência | Ambientes abertos",
+    }
+    if texto in mapa_exato:
+        return mapa_exato[texto]
+
+    def _has_word(t: str, w: str) -> bool:
+        return re.search(rf'\b{re.escape(w)}\b', t) is not None
+
+    if "churrasque" in texto:
+        return "Convivência | Churrasqueiras"
+    if "academ" in texto or "fitness" in texto:
+        return "Atividade Física | Academias"
+    if "quadra" in texto or "beach tenis" in texto:
+        return "Atividade Física | Quadras"
+    if "ciclovia" in texto or "caminhada" in texto or "cooper" in texto:
+        return "Atividade Física | Caminhada e Ciclovia"
+    if "pet" in texto:
+        return "Infraestrutura Pet"
+    if "piscina" in texto:
+        return "Áreas Aquáticas | Piscinas"
+    if "sauna" in texto or _has_word(texto, "spa"):
+        return "Áreas Aquáticas | Sauna e SPA"
+    if "playground" in texto or "parquinho" in texto:
+        return "Áreas Infantis & Familiares"
+    if "praca de eventos" in texto or "rooftop" in texto or "ambiente aberto" in texto:
+        return "Convivência | Ambientes abertos"
+    if "salao de festas" in texto or "festas" in texto or "gourmet" in texto or "jogos" in texto:
+        return "Convivência | Ambientes fechados"
+    if texto == "praca":
+        return "Áreas Infantis & Familiares"
+
+    return "Outros"
+
+
 # --- 3. LÓGICA DE LOCALIZAÇÃO ---
 
 MAPA_ESTADO_REGIAO = {
