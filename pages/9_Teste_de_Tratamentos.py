@@ -103,14 +103,14 @@ def run_semantic_clustering_outros(
 
     if len(unique_texts) < 2:
         unique_texts["cluster_id"] = 0
-        unique_texts["categoria_semantica_sugerida"] = "Outros"
+        unique_texts["categoria_semantica_sugerida"] = pd.NA
         unique_texts["score_semantico"] = 0.0
         summary = pd.DataFrame(
             [{
                 "cluster_id": 0,
                 "qtd_linhas": int(unique_texts["qtd_linhas"].sum()),
                 "qtd_textos_unicos": len(unique_texts),
-                "categoria_semantica_sugerida": "Outros",
+                "categoria_semantica_sugerida": "Sem sugestao",
                 "score_medio": 0.0,
                 "exemplos": ", ".join(unique_texts["area_resposta_exemplo"].head(5).tolist()),
             }]
@@ -429,7 +429,20 @@ else:
                 if map_df.empty:
                     st.warning("Não foi possível gerar clusters para os dados atuais.")
                 else:
-                    map_df["aceita_auto"] = map_df["score_semantico"] >= float(min_score_auto)
+                    categorias_alvo = set(AREA_COMUM_CATEGORIAS_ALVO)
+                    map_df["categoria_semantica_sugerida"] = map_df["categoria_semantica_sugerida"].where(
+                        map_df["categoria_semantica_sugerida"].isin(categorias_alvo),
+                        pd.NA,
+                    )
+                    map_df["aceita_auto"] = (
+                        (map_df["score_semantico"] >= float(min_score_auto))
+                        & map_df["categoria_semantica_sugerida"].isin(categorias_alvo)
+                    )
+                    map_df["categoria_semantica_aplicada"] = np.where(
+                        map_df["aceita_auto"],
+                        map_df["categoria_semantica_sugerida"],
+                        "Outros",
+                    )
                     mapping_for_join = map_df[
                         [
                             "texto_norm_sem",
@@ -437,6 +450,7 @@ else:
                             "categoria_semantica_sugerida",
                             "score_semantico",
                             "aceita_auto",
+                            "categoria_semantica_aplicada",
                         ]
                     ].drop_duplicates()
 
@@ -446,11 +460,7 @@ else:
                     area_long_sem["categoria_area_comum_auto"] = np.where(
                         area_long_sem["categoria_area_comum"] != "Outros",
                         area_long_sem["categoria_area_comum"],
-                        np.where(
-                            area_long_sem["aceita_auto"] == True,
-                            area_long_sem["categoria_semantica_sugerida"],
-                            "Outros",
-                        ),
+                        area_long_sem["categoria_semantica_aplicada"].fillna("Outros"),
                     )
 
                     dist_before = area_long_sem["categoria_area_comum"].value_counts(dropna=False).to_frame("antes")
