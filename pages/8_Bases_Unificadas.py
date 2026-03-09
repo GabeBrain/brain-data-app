@@ -36,6 +36,24 @@ def get_filter_options(df: pd.DataFrame, column: str) -> list[str]:
     return sorted(df[column].dropna().astype(str).unique().tolist())
 
 
+def normalize_key_series(series: pd.Series) -> pd.Series:
+    normalized = series.astype(str).str.strip()
+    normalized = normalized.str.replace(r"\.0$", "", regex=True)
+    normalized = normalized.replace(
+        {"nan": pd.NA, "None": pd.NA, "NaT": pd.NA, "": pd.NA}
+    )
+    return normalized
+
+
+def normalize_merge_keys(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if "respondent_id" in out.columns:
+        out["respondent_id"] = normalize_key_series(out["respondent_id"])
+    if "survey_id" in out.columns:
+        out["survey_id"] = normalize_key_series(out["survey_id"])
+    return out
+
+
 def clamp_date_range(
     start_date: date | None,
     end_date: date | None,
@@ -59,27 +77,61 @@ def clamp_date_range(
 def build_unified_dataframe(
     filtered_analytics: pd.DataFrame,
     df_consolidated: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, str | None]:
+) -> tuple[pd.DataFrame, pd.DataFrame, str | None, str | None]:
     req_cons_cols = {"respondent_id", "survey_id", "question_code", "answer_value"}
     if not req_cons_cols.issubset(df_consolidated.columns):
         return (
             pd.DataFrame(),
             pd.DataFrame(),
             "A tabela consolidated_data nao possui as colunas necessarias para unificacao.",
+            None,
         )
 
     if filtered_analytics.empty:
-        return pd.DataFrame(), pd.DataFrame(), None
+        return pd.DataFrame(), pd.DataFrame(), None, None
 
-    keys = filtered_analytics[["respondent_id", "survey_id"]].drop_duplicates()
-    base_long = df_consolidated.merge(
-        keys,
+    filtered_norm = normalize_merge_keys(filtered_analytics)
+    consolidated_norm = normalize_merge_keys(df_consolidated)
+
+    keys = (
+        filtered_norm[["respondent_id", "survey_id"]]
+        .dropna(subset=["respondent_id", "survey_id"])
+        .drop_duplicates()
+    )
+
+    consolidated_keys = (
+        consolidated_norm[["respondent_id", "survey_id"]]
+        .dropna(subset=["respondent_id", "survey_id"])
+        .drop_duplicates()
+    )
+
+    matched_keys = keys.merge(
+        consolidated_keys,
+        on=["respondent_id", "survey_id"],
+        how="inner",
+    )
+
+    if matched_keys.empty:
+        survey_ids_filtered = set(keys["survey_id"].dropna().tolist())
+        survey_ids_consolidated = set(consolidated_keys["survey_id"].dropna().tolist())
+        common_surveys = survey_ids_filtered.intersection(survey_ids_consolidated)
+
+        info_msg = (
+            "Nenhuma chave respondent_id+survey_id da selecao foi encontrada em consolidated_data. "
+            f"Respondentes filtrados: {len(keys):,}. "
+            f"Surveys filtradas: {len(survey_ids_filtered):,}. "
+            f"Surveys em comum com consolidated_data: {len(common_surveys):,}."
+        )
+        return pd.DataFrame(), pd.DataFrame(), None, info_msg
+
+    base_long = consolidated_norm.merge(
+        matched_keys,
         on=["respondent_id", "survey_id"],
         how="inner",
     )
 
     if base_long.empty:
-        return pd.DataFrame(), base_long, None
+        return pd.DataFrame(), base_long, None, None
 
     output_wide = (
         base_long.pivot_table(
@@ -91,7 +143,7 @@ def build_unified_dataframe(
         .reset_index()
     )
     final_df = output_wide.merge(
-        filtered_analytics,
+        filtered_norm,
         on=["respondent_id", "survey_id"],
         how="left",
     )
@@ -112,7 +164,7 @@ def build_unified_dataframe(
     ]
     final_df = final_df[ordered_cols]
 
-    return final_df, base_long, None
+    return final_df, base_long, None, None
 
 
 def apply_base_filters(
@@ -321,12 +373,14 @@ with st.container(border=True):
     if df_consolidated_preview.empty:
         st.warning("A tabela consolidated_data esta vazia.")
     else:
-        preview_df, _, preview_error = build_unified_dataframe(
+        preview_df, _, preview_error, preview_info = build_unified_dataframe(
             filtered_analytics=filtered_preview,
             df_consolidated=df_consolidated_preview,
         )
         if preview_error:
             st.error(preview_error)
+        elif preview_info:
+            st.warning(preview_info)
         elif preview_df.empty:
             st.info("Nenhuma linha consolidada encontrada para os filtros atuais.")
         else:
@@ -363,13 +417,16 @@ with st.container(border=True):
                     st.session_state["bases_unificadas_result"] = None
                     st.warning("A tabela consolidated_data esta vazia.")
                 else:
-                    final_df, base_long, build_error = build_unified_dataframe(
+                    final_df, base_long, build_error, build_info = build_unified_dataframe(
                         filtered_analytics=filtered_analytics,
                         df_consolidated=df_consolidated,
                     )
                     if build_error:
                         st.session_state["bases_unificadas_result"] = None
                         st.error(build_error)
+                    elif build_info:
+                        st.session_state["bases_unificadas_result"] = None
+                        st.warning(build_info)
                     elif final_df.empty:
                         st.session_state["bases_unificadas_result"] = None
                         st.warning(
