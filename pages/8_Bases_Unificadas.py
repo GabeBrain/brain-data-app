@@ -319,9 +319,9 @@ with st.container(border=True):
     ] or localidade_options
 
     with st.form("bases_unificadas_filters_form"):
-        col_f1, col_f2 = st.columns(2)
+        col_year, col_region, col_income, col_localidade = st.columns(4)
 
-        with col_f1:
+        with col_year:
             selected_years_input = st.multiselect(
                 "Ano(s) - filtro principal",
                 options=years_options,
@@ -341,7 +341,6 @@ with st.container(border=True):
             else:
                 st.info("Sem datas validas na base.")
 
-        with col_f2:
             use_exact_range_input = bool(applied_filters.get("use_exact_range", False))
             faixa_exata_input = None
             default_exact_start = None
@@ -391,20 +390,19 @@ with st.container(border=True):
                 else:
                     st.info("Sem datas validas para aplicar faixa exata.")
 
-        col_f4, col_f5, col_f6 = st.columns(3)
-        with col_f4:
+        with col_region:
             selected_regions_input = st.multiselect(
                 "Regiao(oes)",
                 options=regions_options,
                 default=pre_selected_regions,
             )
-        with col_f5:
+        with col_income:
             selected_income_input = st.multiselect(
                 "Renda(s) macro",
                 options=income_options,
                 default=pre_selected_income,
             )
-        with col_f6:
+        with col_localidade:
             selected_localidade_input = st.multiselect(
                 "Localidade(s)",
                 options=localidade_options,
