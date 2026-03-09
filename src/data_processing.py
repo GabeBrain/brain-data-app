@@ -746,6 +746,7 @@ def categorizar_area_comum(valor: str) -> str:
         "churrasqueira com deck/bar": "Convivência | Churrasqueiras",
         "playground": "Áreas Infantis & Familiares",
         "parquinho": "Áreas Infantis & Familiares",
+        "brinquedoteca": "Áreas Infantis & Familiares",
         "praca": "Áreas Infantis & Familiares",
         "piscina": "Áreas Aquáticas | Piscinas",
         "piscina adulto e infantil": "Áreas Aquáticas | Piscinas",
@@ -778,7 +779,7 @@ def categorizar_area_comum(valor: str) -> str:
         return "Áreas Aquáticas | Piscinas"
     if "sauna" in texto or _has_word(texto, "spa"):
         return "Áreas Aquáticas | Sauna e SPA"
-    if "playground" in texto or "parquinho" in texto:
+    if "playground" in texto or "parquinho" in texto or "brinquedoteca" in texto:
         return "Áreas Infantis & Familiares"
     if "praca de eventos" in texto or "rooftop" in texto or "ambiente aberto" in texto:
         return "Convivência | Ambientes abertos"
