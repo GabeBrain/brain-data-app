@@ -601,30 +601,55 @@ def calcular_media_faixa(faixa: str) -> int | None:
     """
     if not isinstance(faixa, str):
         return None
-    
-    # Remove 'R$', espaços em branco extras e texto que não seja número
-    texto_limpo = re.sub(r'[^\d\.,-]+', ' ', faixa).strip()
-    
-    # Encontra todos os números no texto limpo
-    numeros_encontrados = re.findall(r'[\d\.,]+', texto_limpo)
-    
-    if not numeros_encontrados:
+
+    texto = faixa.strip()
+    if not texto:
         return None
-        
-    numeros_convertidos = []
-    for num_str in numeros_encontrados:
+
+    # Remove o índice da alternativa no começo (ex: "4. ", "12) ")
+    texto = re.sub(r'^\s*\d+\s*[\.\-\)]\s*', '', texto)
+
+    def _to_float(num_str: str, escala: str | None = None) -> float | None:
         try:
-            # Converte o formato brasileiro (1.000,00) para um formato que o Python entende (1000.00)
-            num_limpo = num_str.replace('.', '').replace(',', '.')
-            numeros_convertidos.append(float(num_limpo))
+            valor = float(num_str.replace('.', '').replace(',', '.'))
         except ValueError:
-            continue
-            
-    if not numeros_convertidos:
+            return None
+        if escala:
+            esc = escala.lower()
+            if esc.startswith('milh'):
+                valor *= 1_000_000
+            elif esc.startswith('mil'):
+                valor *= 1_000
+        return valor
+
+    # Prioriza valores explicitamente monetários com "R$"
+    moeda_matches = re.findall(
+        r'R\$\s*([\d\.,]+)\s*(mil(?:h(?:ão|oes|ões)?)?)?',
+        texto,
+        flags=re.IGNORECASE,
+    )
+    valores = []
+    for num_str, escala in moeda_matches:
+        valor = _to_float(num_str, escala if escala else None)
+        if valor is not None:
+            valores.append(valor)
+
+    # Fallback: captura números com possível sufixo "mil/milhão"
+    if not valores:
+        generic_matches = re.findall(
+            r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:,\d+)?)\s*(mil(?:h(?:ão|oes|ões)?)?)?',
+            texto,
+            flags=re.IGNORECASE,
+        )
+        for num_str, escala in generic_matches:
+            valor = _to_float(num_str, escala if escala else None)
+            if valor is not None:
+                valores.append(valor)
+
+    if not valores:
         return None
-        
-    # Retorna a média dos números encontrados, convertida para inteiro
-    return int(np.mean(numeros_convertidos))
+
+    return int(np.mean(valores))
 
 
 def classificar_faixa_antiga(valor: int | None) -> str | None:

@@ -103,10 +103,10 @@ if missing_cols:
 df_filtered["renda_valor_estimado_recalc"] = df_filtered["renda_texto_original"].apply(
     calcular_media_faixa
 )
-df_filtered["renda_faixa_padronizada_recalc"] = df_filtered["renda_valor_estimado"].apply(
+df_filtered["renda_faixa_padronizada_recalc"] = df_filtered["renda_valor_estimado_recalc"].apply(
     classificar_faixa_antiga
 )
-df_filtered["renda_macro_faixa_recalc"] = df_filtered["renda_faixa_padronizada"].apply(
+df_filtered["renda_macro_faixa_recalc"] = df_filtered["renda_faixa_padronizada_recalc"].apply(
     map_renda_to_macro_faixa
 )
 
