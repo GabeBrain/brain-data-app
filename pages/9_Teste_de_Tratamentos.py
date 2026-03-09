@@ -1,5 +1,8 @@
 import pandas as pd
 import streamlit as st
+import numpy as np
+import re
+import unicodedata
 
 from src.database import get_analytics_data, get_consolidated_data_for_surveys
 from src.data_processing import (
@@ -7,6 +10,14 @@ from src.data_processing import (
     AREA_COMUM_CATEGORIAS_ALVO,
     categorizar_area_comum,
 )
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.cluster import MiniBatchKMeans
+    from sklearn.metrics.pairwise import cosine_similarity
+    SKLEARN_AVAILABLE = True
+except Exception:
+    SKLEARN_AVAILABLE = False
 
 
 st.set_page_config(layout="wide", page_title="Teste de Tratamentos")
@@ -38,6 +49,124 @@ def load_apac_long_by_surveys(survey_ids: tuple[int, ...]) -> pd.DataFrame:
 @st.cache_data
 def convert_df_to_csv(df_to_convert: pd.DataFrame) -> bytes:
     return df_to_convert.to_csv(index=False).encode("utf-8")
+
+
+def normalize_semantic_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    text = ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    ).lower()
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def get_category_prototypes() -> dict[str, str]:
+    return {
+        "Áreas Aquáticas | Piscinas": "piscina adulto infantil deck raia solario",
+        "Atividade Física | Academias": "academia fitness musculacao pilates treino",
+        "Convivência | Ambientes fechados": "salao de festas espaco gourmet sala de jogos brinquedoteca coworking",
+        "Infraestrutura Pet": "pet place pet care dog wash espaco pet",
+        "Áreas Infantis & Familiares": "playground parquinho praca infantil familia criancas",
+        "Convivência | Churrasqueiras": "churrasqueira grill barbecue espaco churrasco",
+        "Atividade Física | Quadras": "quadra poliesportiva beach tenis tenis futsal",
+        "Atividade Física | Caminhada e Ciclovia": "pista caminhada ciclovia corrida cooper",
+        "Convivência | Ambientes abertos": "rooftop praca de eventos lounge externo jardim redario",
+        "Áreas Aquáticas | Sauna e SPA": "sauna spa hidromassagem ofuro relaxamento",
+    }
+
+
+def run_semantic_clustering_outros(
+    outros_df: pd.DataFrame,
+    n_clusters: int,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if outros_df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    base = outros_df.copy()
+    base["texto_norm_sem"] = base["area_resposta_original"].apply(normalize_semantic_text)
+    base = base[base["texto_norm_sem"] != ""]
+    if base.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    unique_texts = (
+        base.groupby("texto_norm_sem")
+        .agg(
+            area_resposta_exemplo=("area_resposta_original", "first"),
+            qtd_linhas=("area_resposta_original", "size"),
+        )
+        .reset_index()
+    )
+
+    if len(unique_texts) < 2:
+        unique_texts["cluster_id"] = 0
+        unique_texts["categoria_semantica_sugerida"] = "Outros"
+        unique_texts["score_semantico"] = 0.0
+        summary = pd.DataFrame(
+            [{
+                "cluster_id": 0,
+                "qtd_linhas": int(unique_texts["qtd_linhas"].sum()),
+                "qtd_textos_unicos": len(unique_texts),
+                "categoria_semantica_sugerida": "Outros",
+                "score_medio": 0.0,
+                "exemplos": ", ".join(unique_texts["area_resposta_exemplo"].head(5).tolist()),
+            }]
+        )
+        return unique_texts, summary
+
+    n_clusters = max(2, min(n_clusters, len(unique_texts)))
+    vectorizer = TfidfVectorizer(
+        analyzer="char_wb",
+        ngram_range=(3, 5),
+        min_df=1,
+        max_features=12000,
+    )
+    X = vectorizer.fit_transform(unique_texts["texto_norm_sem"].tolist())
+
+    model = MiniBatchKMeans(
+        n_clusters=n_clusters,
+        random_state=random_state,
+        n_init=10,
+        batch_size=1024,
+    )
+    labels = model.fit_predict(X)
+    unique_texts["cluster_id"] = labels
+
+    prototypes = get_category_prototypes()
+    cat_names = list(prototypes.keys())
+    proto_matrix = vectorizer.transform([prototypes[c] for c in cat_names])
+    sim = cosine_similarity(model.cluster_centers_, proto_matrix)
+    best_idx = sim.argmax(axis=1)
+    best_score = sim.max(axis=1)
+
+    cluster_map = pd.DataFrame(
+        {
+            "cluster_id": np.arange(n_clusters),
+            "categoria_semantica_sugerida": [cat_names[i] for i in best_idx],
+            "score_semantico_cluster": best_score,
+        }
+    )
+    unique_texts = unique_texts.merge(cluster_map, on="cluster_id", how="left")
+    unique_texts["score_semantico"] = unique_texts["score_semantico_cluster"]
+
+    summary_rows = []
+    for cid, g in unique_texts.groupby("cluster_id"):
+        exemplos = ", ".join(g.sort_values("qtd_linhas", ascending=False)["area_resposta_exemplo"].head(5).tolist())
+        summary_rows.append(
+            {
+                "cluster_id": int(cid),
+                "qtd_linhas": int(g["qtd_linhas"].sum()),
+                "qtd_textos_unicos": int(len(g)),
+                "categoria_semantica_sugerida": g["categoria_semantica_sugerida"].iloc[0],
+                "score_medio": float(g["score_semantico"].mean()),
+                "exemplos": exemplos,
+            }
+        )
+    summary = pd.DataFrame(summary_rows).sort_values("qtd_linhas", ascending=False)
+    return unique_texts, summary
 
 
 def normalize_key_series(series: pd.Series) -> pd.Series:
@@ -255,3 +384,111 @@ st.download_button(
     file_name="teste_tratamentos_areas_classificadas.csv",
     mime="text/csv",
 )
+
+st.markdown("---")
+st.header("4. Clusterização Semântica dos 'Outros'")
+st.markdown(
+    "Agrupa respostas que caíram em 'Outros' por similaridade textual (TF-IDF + cosseno) e sugere categoria por cluster."
+)
+
+outros_base = area_long[area_long["categoria_area_comum"] == "Outros"].copy()
+if outros_base.empty:
+    st.success("Não há registros em 'Outros' para clusterizar.")
+else:
+    if not SKLEARN_AVAILABLE:
+        st.error(
+            "Dependência ausente: instale `scikit-learn` no ambiente para habilitar a clusterização semântica."
+        )
+    else:
+        c_s1, c_s2 = st.columns(2)
+        with c_s1:
+            suggested_k = max(8, min(80, int(np.sqrt(len(outros_base)))))
+            n_clusters = st.slider(
+                "Número de clusters semânticos",
+                min_value=2,
+                max_value=min(120, max(10, len(outros_base))),
+                value=suggested_k,
+                step=1,
+            )
+        with c_s2:
+            min_score_auto = st.slider(
+                "Score mínimo para aceitar sugestão automática",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.12,
+                step=0.01,
+            )
+
+        if st.button("Rodar clusterização semântica", type="primary"):
+            with st.spinner("Executando vetorização, clusterização e sugestão de categoria..."):
+                map_df, cluster_summary = run_semantic_clustering_outros(
+                    outros_df=outros_base,
+                    n_clusters=int(n_clusters),
+                )
+
+                if map_df.empty:
+                    st.warning("Não foi possível gerar clusters para os dados atuais.")
+                else:
+                    map_df["aceita_auto"] = map_df["score_semantico"] >= float(min_score_auto)
+                    mapping_for_join = map_df[
+                        [
+                            "texto_norm_sem",
+                            "cluster_id",
+                            "categoria_semantica_sugerida",
+                            "score_semantico",
+                            "aceita_auto",
+                        ]
+                    ].drop_duplicates()
+
+                    area_long_sem = area_long.copy()
+                    area_long_sem["texto_norm_sem"] = area_long_sem["area_resposta_original"].apply(normalize_semantic_text)
+                    area_long_sem = area_long_sem.merge(mapping_for_join, on="texto_norm_sem", how="left")
+                    area_long_sem["categoria_area_comum_auto"] = np.where(
+                        area_long_sem["categoria_area_comum"] != "Outros",
+                        area_long_sem["categoria_area_comum"],
+                        np.where(
+                            area_long_sem["aceita_auto"] == True,
+                            area_long_sem["categoria_semantica_sugerida"],
+                            "Outros",
+                        ),
+                    )
+
+                    dist_before = area_long_sem["categoria_area_comum"].value_counts(dropna=False).to_frame("antes")
+                    dist_after = area_long_sem["categoria_area_comum_auto"].value_counts(dropna=False).to_frame("depois")
+                    dist_compare = dist_before.join(dist_after, how="outer").fillna(0).astype(int)
+
+                    st.subheader("Distribuição por categoria: antes vs depois")
+                    st.dataframe(dist_compare, width="stretch")
+
+                    st.subheader("Resumo dos clusters")
+                    st.dataframe(cluster_summary, width="stretch")
+
+                    with st.expander("Mapa de textos para cluster e categoria sugerida"):
+                        st.dataframe(
+                            map_df.sort_values(["cluster_id", "qtd_linhas"], ascending=[True, False]),
+                            width="stretch",
+                        )
+
+                    with st.expander("Base com categoria automática (amostra)"):
+                        cols_show = [
+                            c
+                            for c in [
+                                "respondent_id",
+                                "survey_id",
+                                "pergunta_area",
+                                "area_resposta_original",
+                                "categoria_area_comum",
+                                "categoria_semantica_sugerida",
+                                "score_semantico",
+                                "categoria_area_comum_auto",
+                            ]
+                            if c in area_long_sem.columns
+                        ]
+                        st.dataframe(area_long_sem[cols_show].head(1500), width="stretch")
+
+                    st.download_button(
+                        label=f"Baixar resultado semântico ({len(area_long_sem)} linhas)",
+                        data=convert_df_to_csv(area_long_sem),
+                        file_name="teste_tratamentos_areas_semantico.csv",
+                        mime="text/csv",
+                    )

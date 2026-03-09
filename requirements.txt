@@ -9,3 +9,4 @@ altair
 folium
 streamlit-folium
 matplotlib
+scikit-learn
