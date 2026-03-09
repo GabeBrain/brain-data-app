@@ -36,6 +36,26 @@ def get_filter_options(df: pd.DataFrame, column: str) -> list[str]:
     return sorted(df[column].dropna().astype(str).unique().tolist())
 
 
+def clamp_date_range(
+    start_date: date | None,
+    end_date: date | None,
+    min_date: date | None,
+    max_date: date | None,
+) -> tuple[date | None, date | None]:
+    if start_date is None or end_date is None:
+        return start_date, end_date
+
+    if min_date is not None and start_date < min_date:
+        start_date = min_date
+    if max_date is not None and end_date > max_date:
+        end_date = max_date
+
+    if start_date > end_date:
+        start_date = end_date
+
+    return start_date, end_date
+
+
 def build_unified_dataframe(
     filtered_analytics: pd.DataFrame,
     df_consolidated: pd.DataFrame,
@@ -200,13 +220,7 @@ with st.container(border=True):
         exact_start_date = None
         exact_end_date = None
 
-        with st.popover("📅 Faixa exata (opcional)"):
-            use_exact_range = st.checkbox(
-                "Usar faixa exata de calendario",
-                value=False,
-                help="Opcional. Refina o recorte de Ano(s).",
-            )
-
+        with st.popover("Faixa exata (opcional)"):
             if selected_years:
                 min_selected = min(selected_years)
                 max_selected = max(selected_years)
@@ -216,11 +230,14 @@ with st.container(border=True):
                 default_exact_start = global_min_date
                 default_exact_end = global_max_date
 
-            if (
-                use_exact_range
-                and default_exact_start is not None
-                and default_exact_end is not None
-            ):
+            default_exact_start, default_exact_end = clamp_date_range(
+                default_exact_start,
+                default_exact_end,
+                global_min_date,
+                global_max_date,
+            )
+
+            if default_exact_start is not None and default_exact_end is not None:
                 faixa_exata = st.date_input(
                     "Escolha a faixa exata",
                     value=(default_exact_start, default_exact_end),
@@ -229,23 +246,40 @@ with st.container(border=True):
                     format="DD/MM/YYYY",
                 )
 
+                use_exact_range = st.checkbox(
+                    "Aplicar faixa exata",
+                    value=False,
+                    help="Opcional. Refina o recorte de Ano(s).",
+                )
+
                 if isinstance(faixa_exata, (tuple, list)):
                     if len(faixa_exata) == 2:
-                        exact_start_date, exact_end_date = faixa_exata
+                        temp_start_date, temp_end_date = faixa_exata
                     elif len(faixa_exata) == 1:
-                        exact_start_date = exact_end_date = faixa_exata[0]
+                        temp_start_date = temp_end_date = faixa_exata[0]
                     else:
-                        exact_start_date, exact_end_date = (
+                        temp_start_date, temp_end_date = (
                             default_exact_start,
                             default_exact_end,
                         )
                 else:
-                    exact_start_date = exact_end_date = faixa_exata
+                    temp_start_date = temp_end_date = faixa_exata
 
-                st.caption(
-                    f"Faixa exata aplicada: {exact_start_date.strftime('%d/%m/%Y')} a {exact_end_date.strftime('%d/%m/%Y')}"
+                temp_start_date, temp_end_date = clamp_date_range(
+                    temp_start_date,
+                    temp_end_date,
+                    global_min_date,
+                    global_max_date,
                 )
-            elif use_exact_range:
+
+                if use_exact_range and temp_start_date and temp_end_date:
+                    exact_start_date, exact_end_date = temp_start_date, temp_end_date
+                    st.caption(
+                        f"Faixa exata aplicada: {exact_start_date.strftime('%d/%m/%Y')} a {exact_end_date.strftime('%d/%m/%Y')}"
+                    )
+                else:
+                    st.caption("Faixa exata desativada.")
+            else:
                 st.info("Sem datas validas para aplicar faixa exata.")
 
     col_f4, col_f5, col_f6 = st.columns(3)
