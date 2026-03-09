@@ -283,216 +283,321 @@ if not valid_dates.empty:
     )
 
 with st.container(border=True):
-    col_f1, col_f2 = st.columns(2)
+    years_options = years_available
+    regions_options = get_filter_options(df_analytics, "regiao")
+    income_options = get_filter_options(df_analytics, "renda_macro_faixa")
+    localidade_options = get_filter_options(df_analytics, "localidade")
 
-    with col_f1:
-        years_options = years_available
-        selected_years_input = st.multiselect(
-            "Ano(s) - filtro principal",
-            options=years_options,
-            default=years_options,
-            help="Exemplo: selecionar 2025 usa automaticamente de 01/01/2025 a 31/12/2025.",
-        )
-        selected_years = (
-            selected_years_input if selected_years_input else years_available
-        )
+    default_filter_state = {
+        "selected_years": years_options,
+        "selected_regions": regions_options,
+        "selected_income": income_options,
+        "selected_localidade": localidade_options,
+        "use_exact_range": False,
+        "exact_start_date": None,
+        "exact_end_date": None,
+    }
+    if "bases_unificadas_applied_filters" not in st.session_state:
+        st.session_state["bases_unificadas_applied_filters"] = default_filter_state
 
-        if selected_years:
-            anos_ordenados = sorted(selected_years)
-            periodo_principal_inicio = date(min(anos_ordenados), 1, 1)
-            periodo_principal_fim = date(max(anos_ordenados), 12, 31)
-            st.caption(
-                f"Periodo principal por Ano(s): {periodo_principal_inicio.strftime('%d/%m/%Y')} a {periodo_principal_fim.strftime('%d/%m/%Y')}"
+    applied_filters = st.session_state["bases_unificadas_applied_filters"]
+    pre_selected_years = [
+        y for y in applied_filters.get("selected_years", years_options)
+        if y in years_options
+    ] or years_options
+    pre_selected_regions = [
+        r for r in applied_filters.get("selected_regions", regions_options)
+        if r in regions_options
+    ] or regions_options
+    pre_selected_income = [
+        r for r in applied_filters.get("selected_income", income_options)
+        if r in income_options
+    ] or income_options
+    pre_selected_localidade = [
+        l for l in applied_filters.get("selected_localidade", localidade_options)
+        if l in localidade_options
+    ] or localidade_options
+
+    with st.form("bases_unificadas_filters_form"):
+        col_f1, col_f2 = st.columns(2)
+
+        with col_f1:
+            selected_years_input = st.multiselect(
+                "Ano(s) - filtro principal",
+                options=years_options,
+                default=pre_selected_years,
+                help="Exemplo: selecionar 2025 usa automaticamente de 01/01/2025 a 31/12/2025.",
             )
-        else:
-            st.info("Sem datas validas na base.")
-
-    with col_f2:
-        exact_start_date = None
-        exact_end_date = None
-
-        with st.popover("Faixa exata (opcional)"):
-            if selected_years:
-                min_selected = min(selected_years)
-                max_selected = max(selected_years)
-                default_exact_start = date(min_selected, 1, 1)
-                default_exact_end = date(max_selected, 12, 31)
+            selected_years_for_display = (
+                selected_years_input if selected_years_input else years_options
+            )
+            if selected_years_for_display:
+                anos_ordenados = sorted(selected_years_for_display)
+                periodo_principal_inicio = date(min(anos_ordenados), 1, 1)
+                periodo_principal_fim = date(max(anos_ordenados), 12, 31)
+                st.caption(
+                    f"Periodo principal por Ano(s): {periodo_principal_inicio.strftime('%d/%m/%Y')} a {periodo_principal_fim.strftime('%d/%m/%Y')}"
+                )
             else:
-                default_exact_start = global_min_date
-                default_exact_end = global_max_date
+                st.info("Sem datas validas na base.")
 
-            default_exact_start, default_exact_end = clamp_date_range(
-                default_exact_start,
-                default_exact_end,
-                global_min_date,
-                global_max_date,
-            )
+        with col_f2:
+            use_exact_range_input = bool(applied_filters.get("use_exact_range", False))
+            faixa_exata_input = None
+            default_exact_start = None
+            default_exact_end = None
 
-            if default_exact_start is not None and default_exact_end is not None:
-                faixa_exata = st.date_input(
-                    "Escolha a faixa exata",
-                    value=(default_exact_start, default_exact_end),
-                    min_value=global_min_date,
-                    max_value=global_max_date,
-                    format="DD/MM/YYYY",
-                )
-
-                use_exact_range = st.checkbox(
-                    "Aplicar faixa exata",
-                    value=False,
-                    help="Opcional. Refina o recorte de Ano(s).",
-                )
-
-                if isinstance(faixa_exata, (tuple, list)):
-                    if len(faixa_exata) == 2:
-                        temp_start_date, temp_end_date = faixa_exata
-                    elif len(faixa_exata) == 1:
-                        temp_start_date = temp_end_date = faixa_exata[0]
-                    else:
-                        temp_start_date, temp_end_date = (
-                            default_exact_start,
-                            default_exact_end,
-                        )
+            with st.popover("Faixa exata (opcional)"):
+                if selected_years_for_display:
+                    min_selected = min(selected_years_for_display)
+                    max_selected = max(selected_years_for_display)
+                    default_exact_start = date(min_selected, 1, 1)
+                    default_exact_end = date(max_selected, 12, 31)
                 else:
-                    temp_start_date = temp_end_date = faixa_exata
+                    default_exact_start = global_min_date
+                    default_exact_end = global_max_date
 
-                temp_start_date, temp_end_date = clamp_date_range(
-                    temp_start_date,
-                    temp_end_date,
+                default_exact_start, default_exact_end = clamp_date_range(
+                    default_exact_start,
+                    default_exact_end,
                     global_min_date,
                     global_max_date,
                 )
 
-                if use_exact_range and temp_start_date and temp_end_date:
-                    exact_start_date, exact_end_date = temp_start_date, temp_end_date
-                    st.caption(
-                        f"Faixa exata aplicada: {exact_start_date.strftime('%d/%m/%Y')} a {exact_end_date.strftime('%d/%m/%Y')}"
+                if default_exact_start is not None and default_exact_end is not None:
+                    saved_start = applied_filters.get("exact_start_date")
+                    saved_end = applied_filters.get("exact_end_date")
+                    if use_exact_range_input and saved_start and saved_end:
+                        default_exact_start, default_exact_end = clamp_date_range(
+                            saved_start,
+                            saved_end,
+                            global_min_date,
+                            global_max_date,
+                        )
+
+                    faixa_exata_input = st.date_input(
+                        "Escolha a faixa exata",
+                        value=(default_exact_start, default_exact_end),
+                        min_value=global_min_date,
+                        max_value=global_max_date,
+                        format="DD/MM/YYYY",
+                    )
+
+                    use_exact_range_input = st.checkbox(
+                        "Aplicar faixa exata",
+                        value=use_exact_range_input,
+                        help="Opcional. Refina o recorte de Ano(s).",
                     )
                 else:
-                    st.caption("Faixa exata desativada.")
+                    st.info("Sem datas validas para aplicar faixa exata.")
+
+        col_f4, col_f5, col_f6 = st.columns(3)
+        with col_f4:
+            selected_regions_input = st.multiselect(
+                "Regiao(oes)",
+                options=regions_options,
+                default=pre_selected_regions,
+            )
+        with col_f5:
+            selected_income_input = st.multiselect(
+                "Renda(s) macro",
+                options=income_options,
+                default=pre_selected_income,
+            )
+        with col_f6:
+            selected_localidade_input = st.multiselect(
+                "Localidade(s)",
+                options=localidade_options,
+                default=pre_selected_localidade,
+            )
+
+        apply_filters_clicked = st.form_submit_button(
+            "Aplicar filtros",
+            type="primary",
+        )
+
+    if apply_filters_clicked:
+        selected_years = selected_years_input if selected_years_input else years_options
+        selected_regions = selected_regions_input if selected_regions_input else regions_options
+        selected_income = selected_income_input if selected_income_input else income_options
+        selected_localidade = (
+            selected_localidade_input if selected_localidade_input else localidade_options
+        )
+
+        exact_start_date = None
+        exact_end_date = None
+        if use_exact_range_input and faixa_exata_input is not None:
+            if isinstance(faixa_exata_input, (tuple, list)):
+                if len(faixa_exata_input) == 2:
+                    temp_start_date, temp_end_date = faixa_exata_input
+                elif len(faixa_exata_input) == 1:
+                    temp_start_date = temp_end_date = faixa_exata_input[0]
+                else:
+                    temp_start_date, temp_end_date = default_exact_start, default_exact_end
             else:
-                st.info("Sem datas validas para aplicar faixa exata.")
+                temp_start_date = temp_end_date = faixa_exata_input
 
-    col_f4, col_f5, col_f6 = st.columns(3)
-    with col_f4:
-        regions_options = get_filter_options(df_analytics, "regiao")
-        selected_regions = st.multiselect(
-            "Regiao(oes)",
-            options=regions_options,
-            default=regions_options,
-        )
-    with col_f5:
-        income_options = get_filter_options(df_analytics, "renda_macro_faixa")
-        selected_income = st.multiselect(
-            "Renda(s) macro",
-            options=income_options,
-            default=income_options,
-        )
-    with col_f6:
-        localidade_options = get_filter_options(df_analytics, "localidade")
-        selected_localidade = st.multiselect(
-            "Localidade(s)",
-            options=localidade_options,
-            default=localidade_options,
-        )
+            temp_start_date, temp_end_date = clamp_date_range(
+                temp_start_date,
+                temp_end_date,
+                global_min_date,
+                global_max_date,
+            )
+            if temp_start_date and temp_end_date:
+                exact_start_date, exact_end_date = temp_start_date, temp_end_date
 
-    filtered_preview = apply_base_filters(
-        df=df_analytics,
-        exact_start_date=exact_start_date,
-        exact_end_date=exact_end_date,
-        selected_years=selected_years,
-        selected_regions=selected_regions,
-        selected_income=selected_income,
-        selected_localidade=selected_localidade,
-    ).drop_duplicates(subset=["respondent_id", "survey_id"])
+        st.session_state["bases_unificadas_applied_filters"] = {
+            "selected_years": selected_years,
+            "selected_regions": selected_regions,
+            "selected_income": selected_income,
+            "selected_localidade": selected_localidade,
+            "use_exact_range": use_exact_range_input,
+            "exact_start_date": exact_start_date,
+            "exact_end_date": exact_end_date,
+        }
+        st.session_state["bases_unificadas_result"] = None
+
+        filtered_preview = apply_base_filters(
+            df=df_analytics,
+            exact_start_date=exact_start_date,
+            exact_end_date=exact_end_date,
+            selected_years=selected_years,
+            selected_regions=selected_regions,
+            selected_income=selected_income,
+            selected_localidade=selected_localidade,
+        ).drop_duplicates(subset=["respondent_id", "survey_id"])
+
+        preview_payload = {
+            "filtered_count": len(filtered_preview),
+            "status": "info",
+            "message": "Nenhuma linha consolidada encontrada para os filtros atuais.",
+            "preview_head": pd.DataFrame(),
+            "preview_total_rows": 0,
+            "preview_total_cols": 0,
+            "preview_limited": len(filtered_preview) > 500,
+        }
+        if filtered_preview.empty:
+            preview_payload["message"] = "Nenhum registro encontrado para os filtros aplicados."
+        else:
+            survey_ids_preview = get_filtered_survey_ids(filtered_preview)
+            df_consolidated_preview = load_consolidated_data_for_surveys(
+                tuple(survey_ids_preview)
+            )
+            if df_consolidated_preview.empty:
+                preview_payload["status"] = "warning"
+                preview_payload["message"] = (
+                    "Nenhum dado consolidado encontrado para as surveys da selecao atual."
+                )
+            else:
+                preview_df, _, preview_error, preview_info = build_unified_dataframe(
+                    filtered_analytics=filtered_preview,
+                    df_consolidated=df_consolidated_preview,
+                    max_keys=500,
+                )
+                if preview_error:
+                    preview_payload["status"] = "error"
+                    preview_payload["message"] = preview_error
+                elif preview_info:
+                    preview_payload["status"] = "warning"
+                    preview_payload["message"] = preview_info
+                elif preview_df.empty:
+                    preview_payload["status"] = "info"
+                    preview_payload["message"] = (
+                        "Nenhuma linha consolidada encontrada para os filtros atuais."
+                    )
+                else:
+                    preview_payload["status"] = "ok"
+                    preview_payload["message"] = ""
+                    preview_payload["preview_head"] = preview_df.head(30)
+                    preview_payload["preview_total_rows"] = len(preview_df)
+                    preview_payload["preview_total_cols"] = preview_df.shape[1]
+
+        st.session_state["bases_unificadas_preview_payload"] = preview_payload
 
     st.markdown("##### Previa da base unificada (head 30)")
-    st.caption(
-        f"Respondentes unicos na selecao atual: {len(filtered_preview):,}"
-    )
-
-    survey_ids_preview = get_filtered_survey_ids(filtered_preview)
-    df_consolidated_preview = load_consolidated_data_for_surveys(
-        tuple(survey_ids_preview)
-    )
-    if df_consolidated_preview.empty:
-        st.warning("Nenhum dado consolidado encontrado para as surveys da selecao atual.")
+    preview_payload = st.session_state.get("bases_unificadas_preview_payload")
+    if not preview_payload:
+        st.info("Ajuste os filtros e clique em 'Aplicar filtros' para carregar a previa.")
     else:
-        preview_df, _, preview_error, preview_info = build_unified_dataframe(
-            filtered_analytics=filtered_preview,
-            df_consolidated=df_consolidated_preview,
-            max_keys=500,
+        st.caption(
+            f"Respondentes unicos na selecao atual: {preview_payload.get('filtered_count', 0):,}"
         )
-        if preview_error:
-            st.error(preview_error)
-        elif preview_info:
-            st.warning(preview_info)
-        elif preview_df.empty:
-            st.info("Nenhuma linha consolidada encontrada para os filtros atuais.")
-        else:
-            st.caption(f"Linhas da base unificada atual: {len(preview_df):,}")
-            st.caption(f"Total de colunas na base unificada: {preview_df.shape[1]:,}")
-            if len(filtered_preview) > 500:
+        status = preview_payload.get("status")
+        message = preview_payload.get("message", "")
+        if status == "error":
+            st.error(message)
+        elif status == "warning":
+            st.warning(message)
+        elif status == "info" and message:
+            st.info(message)
+        elif status == "ok":
+            st.caption(
+                f"Linhas da base unificada atual: {preview_payload.get('preview_total_rows', 0):,}"
+            )
+            st.caption(
+                f"Total de colunas na base unificada: {preview_payload.get('preview_total_cols', 0):,}"
+            )
+            if preview_payload.get("preview_limited"):
                 st.caption(
                     "Previa calculada com ate 500 respondentes da selecao para manter performance."
                 )
             st.caption(
                 "Dica: role horizontalmente na tabela para visualizar todas as colunas."
             )
-            st.dataframe(preview_df.head(30), width="stretch")
+            st.dataframe(preview_payload.get("preview_head", pd.DataFrame()), width="stretch")
 
     if st.button("Gerar base unificada", type="primary"):
-        with st.spinner("Aplicando filtros e montando base unificada..."):
-            filtered_analytics = apply_base_filters(
-                df=df_analytics,
-                exact_start_date=exact_start_date,
-                exact_end_date=exact_end_date,
-                selected_years=selected_years,
-                selected_regions=selected_regions,
-                selected_income=selected_income,
-                selected_localidade=selected_localidade,
-            )
+        applied = st.session_state.get("bases_unificadas_applied_filters")
+        if not applied or "bases_unificadas_preview_payload" not in st.session_state:
+            st.warning("Clique em 'Aplicar filtros' antes de gerar a base unificada.")
+        else:
+            with st.spinner("Aplicando filtros e montando base unificada..."):
+                filtered_analytics = apply_base_filters(
+                    df=df_analytics,
+                    exact_start_date=applied.get("exact_start_date"),
+                    exact_end_date=applied.get("exact_end_date"),
+                    selected_years=applied.get("selected_years", years_options),
+                    selected_regions=applied.get("selected_regions", regions_options),
+                    selected_income=applied.get("selected_income", income_options),
+                    selected_localidade=applied.get("selected_localidade", localidade_options),
+                ).drop_duplicates(subset=["respondent_id", "survey_id"])
 
-            filtered_analytics = filtered_analytics.drop_duplicates(
-                subset=["respondent_id", "survey_id"]
-            )
-
-            if filtered_analytics.empty:
-                st.session_state["bases_unificadas_result"] = None
-                st.warning("Nenhum registro encontrado para os filtros escolhidos.")
-            else:
-                survey_ids_selected = get_filtered_survey_ids(filtered_analytics)
-                df_consolidated = load_consolidated_data_for_surveys(
-                    tuple(survey_ids_selected)
-                )
-
-                if df_consolidated.empty:
+                if filtered_analytics.empty:
                     st.session_state["bases_unificadas_result"] = None
-                    st.warning(
-                        "Nenhum dado consolidado encontrado para as surveys dos filtros escolhidos."
-                    )
+                    st.warning("Nenhum registro encontrado para os filtros escolhidos.")
                 else:
-                    final_df, base_long, build_error, build_info = build_unified_dataframe(
-                        filtered_analytics=filtered_analytics,
-                        df_consolidated=df_consolidated,
+                    survey_ids_selected = get_filtered_survey_ids(filtered_analytics)
+                    df_consolidated = load_consolidated_data_for_surveys(
+                        tuple(survey_ids_selected)
                     )
-                    if build_error:
-                        st.session_state["bases_unificadas_result"] = None
-                        st.error(build_error)
-                    elif build_info:
-                        st.session_state["bases_unificadas_result"] = None
-                        st.warning(build_info)
-                    elif final_df.empty:
+
+                    if df_consolidated.empty:
                         st.session_state["bases_unificadas_result"] = None
                         st.warning(
-                            "Nenhuma linha consolidada encontrada para os filtros escolhidos."
+                            "Nenhum dado consolidado encontrado para as surveys dos filtros escolhidos."
                         )
                     else:
-                        st.session_state["bases_unificadas_result"] = {
-                            "df": final_df,
-                            "filtered_analytics": filtered_analytics,
-                            "base_long": base_long,
-                        }
+                        final_df, base_long, build_error, build_info = build_unified_dataframe(
+                            filtered_analytics=filtered_analytics,
+                            df_consolidated=df_consolidated,
+                        )
+                        if build_error:
+                            st.session_state["bases_unificadas_result"] = None
+                            st.error(build_error)
+                        elif build_info:
+                            st.session_state["bases_unificadas_result"] = None
+                            st.warning(build_info)
+                        elif final_df.empty:
+                            st.session_state["bases_unificadas_result"] = None
+                            st.warning(
+                                "Nenhuma linha consolidada encontrada para os filtros escolhidos."
+                            )
+                        else:
+                            st.session_state["bases_unificadas_result"] = {
+                                "df": final_df,
+                                "filtered_analytics": filtered_analytics,
+                                "base_long": base_long,
+                            }
 
 if "bases_unificadas_result" in st.session_state and st.session_state["bases_unificadas_result"]:
     result = st.session_state["bases_unificadas_result"]
