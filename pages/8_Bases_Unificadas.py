@@ -286,10 +286,11 @@ with st.container(border=True):
     col_f1, col_f2 = st.columns(2)
 
     with col_f1:
+        years_options = years_available
         selected_years_input = st.multiselect(
             "Ano(s) - filtro principal",
-            options=years_available,
-            default=years_available,
+            options=years_options,
+            default=years_options,
             help="Exemplo: selecionar 2025 usa automaticamente de 01/01/2025 a 31/12/2025.",
         )
         selected_years = (
@@ -374,22 +375,25 @@ with st.container(border=True):
 
     col_f4, col_f5, col_f6 = st.columns(3)
     with col_f4:
+        regions_options = get_filter_options(df_analytics, "regiao")
         selected_regions = st.multiselect(
             "Regiao(oes)",
-            options=get_filter_options(df_analytics, "regiao"),
-            default=[],
+            options=regions_options,
+            default=regions_options,
         )
     with col_f5:
+        income_options = get_filter_options(df_analytics, "renda_macro_faixa")
         selected_income = st.multiselect(
             "Renda(s) macro",
-            options=get_filter_options(df_analytics, "renda_macro_faixa"),
-            default=[],
+            options=income_options,
+            default=income_options,
         )
     with col_f6:
+        localidade_options = get_filter_options(df_analytics, "localidade")
         selected_localidade = st.multiselect(
             "Localidade(s)",
-            options=get_filter_options(df_analytics, "localidade"),
-            default=[],
+            options=localidade_options,
+            default=localidade_options,
         )
 
     filtered_preview = apply_base_filters(
