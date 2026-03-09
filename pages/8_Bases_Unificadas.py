@@ -616,11 +616,11 @@ if "bases_unificadas_result" in st.session_state and st.session_state["bases_uni
 
     st.caption("Formato atual: Largo (1 linha por respondente)")
 
-    with st.expander("Ver tabela completa da base unificada"):
-        st.dataframe(final_df, width="stretch", height=500)
+    st.subheader("Tabela completa da base unificada")
+    st.dataframe(final_df, width="stretch", height=500)
 
-    with st.expander("Ver tabela analytics da selecao de filtros"):
-        st.dataframe(filtered_analytics, width="stretch", height=500)
+    st.subheader("Tabela analytics da selecao de filtros")
+    st.dataframe(filtered_analytics, width="stretch", height=500)
 
     st.download_button(
         label=f"Baixar base unificada ({len(final_df)} linhas)",
