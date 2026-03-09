@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from datetime import date
 
 from src.database import get_all_consolidated_data, get_analytics_data
 
@@ -104,8 +105,8 @@ def build_unified_dataframe(
 
 def apply_base_filters(
     df: pd.DataFrame,
-    start_date,
-    end_date,
+    exact_start_date,
+    exact_end_date,
     selected_years: list[int],
     selected_regions: list[str],
     selected_income: list[str],
@@ -113,15 +114,15 @@ def apply_base_filters(
 ) -> pd.DataFrame:
     filtered = df.copy()
 
-    if "data_pesquisa" in filtered.columns and start_date and end_date:
+    if "data_pesquisa" in filtered.columns and selected_years:
+        filtered = filtered[filtered["data_pesquisa"].dt.year.isin(selected_years)]
+
+    if "data_pesquisa" in filtered.columns and exact_start_date and exact_end_date:
         date_mask = (
-            (filtered["data_pesquisa"].dt.date >= start_date)
-            & (filtered["data_pesquisa"].dt.date <= end_date)
+            (filtered["data_pesquisa"].dt.date >= exact_start_date)
+            & (filtered["data_pesquisa"].dt.date <= exact_end_date)
         )
         filtered = filtered[date_mask]
-
-    if selected_years and "data_pesquisa" in filtered.columns:
-        filtered = filtered[filtered["data_pesquisa"].dt.year.isin(selected_years)]
 
     if selected_regions and "regiao" in filtered.columns:
         filtered = filtered[filtered["regiao"].isin(selected_regions)]
@@ -166,54 +167,94 @@ st.header("1. Defina os filtros da base unificada")
 date_col = df_analytics.get("data_pesquisa")
 valid_dates = date_col.dropna() if isinstance(date_col, pd.Series) else pd.Series(dtype="datetime64[ns]")
 
-default_start = None
-default_end = None
+global_min_date = None
+global_max_date = None
+years_available: list[int] = []
 if not valid_dates.empty:
-    default_start = valid_dates.min().date()
-    default_end = valid_dates.max().date()
+    global_min_date = valid_dates.min().date()
+    global_max_date = valid_dates.max().date()
+    years_available = (
+        valid_dates.dt.year.astype(int)
+        .sort_values()
+        .unique()
+        .tolist()
+    )
 
 with st.container(border=True):
     col_f1, col_f2, col_f3 = st.columns(3)
 
     with col_f1:
-        if default_start and default_end:
-            periodo = st.date_input(
-                "Periodo de coleta",
-                value=(default_start, default_end),
-                min_value=default_start,
-                max_value=default_end,
-            )
+        selected_years_input = st.multiselect(
+            "Ano(s) - filtro principal",
+            options=years_available,
+            default=years_available,
+            help="Exemplo: selecionar 2025 usa automaticamente de 01/01/2025 a 31/12/2025.",
+        )
+        selected_years = (
+            selected_years_input if selected_years_input else years_available
+        )
 
-            if isinstance(periodo, (tuple, list)):
-                if len(periodo) == 2:
-                    start_date, end_date = periodo
-                elif len(periodo) == 1:
-                    start_date = end_date = periodo[0]
-                else:
-                    start_date, end_date = default_start, default_end
-            else:
-                start_date = end_date = periodo
+        if selected_years:
+            anos_ordenados = sorted(selected_years)
+            periodo_principal_inicio = date(min(anos_ordenados), 1, 1)
+            periodo_principal_fim = date(max(anos_ordenados), 12, 31)
+            st.caption(
+                f"Periodo principal por Ano(s): {periodo_principal_inicio.strftime('%d/%m/%Y')} a {periodo_principal_fim.strftime('%d/%m/%Y')}"
+            )
         else:
-            start_date, end_date = None, None
             st.info("Sem datas validas na base.")
 
     with col_f2:
-        years_available = []
-        if "data_pesquisa" in df_analytics.columns:
-            years_available = (
-                df_analytics["data_pesquisa"]
-                .dropna()
-                .dt.year.astype(int)
-                .sort_values()
-                .unique()
-                .tolist()
+        exact_start_date = None
+        exact_end_date = None
+
+        with st.popover("📅 Faixa exata (opcional)"):
+            use_exact_range = st.checkbox(
+                "Usar faixa exata de calendario",
+                value=False,
+                help="Opcional. Refina o recorte de Ano(s).",
             )
-        selected_years = st.multiselect(
-            "Ano(s)",
-            options=years_available,
-            default=years_available,
-            help="Use para recortes como 2021-2025 ou apenas 2025.",
-        )
+
+            if selected_years:
+                min_selected = min(selected_years)
+                max_selected = max(selected_years)
+                default_exact_start = date(min_selected, 1, 1)
+                default_exact_end = date(max_selected, 12, 31)
+            else:
+                default_exact_start = global_min_date
+                default_exact_end = global_max_date
+
+            if (
+                use_exact_range
+                and default_exact_start is not None
+                and default_exact_end is not None
+            ):
+                faixa_exata = st.date_input(
+                    "Escolha a faixa exata",
+                    value=(default_exact_start, default_exact_end),
+                    min_value=global_min_date,
+                    max_value=global_max_date,
+                    format="DD/MM/YYYY",
+                )
+
+                if isinstance(faixa_exata, (tuple, list)):
+                    if len(faixa_exata) == 2:
+                        exact_start_date, exact_end_date = faixa_exata
+                    elif len(faixa_exata) == 1:
+                        exact_start_date = exact_end_date = faixa_exata[0]
+                    else:
+                        exact_start_date, exact_end_date = (
+                            default_exact_start,
+                            default_exact_end,
+                        )
+                else:
+                    exact_start_date = exact_end_date = faixa_exata
+
+                st.caption(
+                    f"Faixa exata aplicada: {exact_start_date.strftime('%d/%m/%Y')} a {exact_end_date.strftime('%d/%m/%Y')}"
+                )
+            elif use_exact_range:
+                st.info("Sem datas validas para aplicar faixa exata.")
 
     with col_f3:
         output_format = st.selectbox(
@@ -246,8 +287,8 @@ with st.container(border=True):
 
     filtered_preview = apply_base_filters(
         df=df_analytics,
-        start_date=start_date,
-        end_date=end_date,
+        exact_start_date=exact_start_date,
+        exact_end_date=exact_end_date,
         selected_years=selected_years,
         selected_regions=selected_regions,
         selected_income=selected_income,
@@ -284,8 +325,8 @@ with st.container(border=True):
         with st.spinner("Aplicando filtros e montando base unificada..."):
             filtered_analytics = apply_base_filters(
                 df=df_analytics,
-                start_date=start_date,
-                end_date=end_date,
+                exact_start_date=exact_start_date,
+                exact_end_date=exact_end_date,
                 selected_years=selected_years,
                 selected_regions=selected_regions,
                 selected_income=selected_income,
