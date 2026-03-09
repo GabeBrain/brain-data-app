@@ -66,6 +66,7 @@ Esta aplicação foi desenvolvida para automatizar o ciclo de vida dos dados de 
 - **`Dashboard de Análise`**: Visualize os dados de forma interativa com filtros dinâmicos.
 - **`Dashboard de Controle`**: Monitore o andamento da coleta de campo.
 - **`Gerador de Amostra`**: Crie planos de amostragem e extraia amostras otimizadas.
+- **`Bases Unificadas`**: Exporte bases completas por filtros, sem amostragem.
 - **`Manutenção e Admin`**: Ferramentas para administradores do sistema.
 """)
 
