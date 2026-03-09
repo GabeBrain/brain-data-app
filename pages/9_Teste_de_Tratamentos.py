@@ -1,14 +1,11 @@
 import pandas as pd
 import streamlit as st
 
-from src.database import get_analytics_data
+from src.database import get_analytics_data, get_consolidated_data_for_surveys
 from src.data_processing import (
     APAC_AREAS_COLS,
     AREA_COMUM_CATEGORIAS_ALVO,
-    calcular_media_faixa,
     categorizar_area_comum,
-    classificar_faixa_antiga,
-    map_renda_to_macro_faixa,
 )
 
 
@@ -17,7 +14,7 @@ st.logo("assets/logoBrain.png")
 
 
 @st.cache_data(ttl=1800)
-def load_data() -> pd.DataFrame:
+def load_analytics() -> pd.DataFrame:
     df = get_analytics_data()
     if df.empty:
         return df
@@ -26,270 +23,235 @@ def load_data() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=1800)
+def load_apac_long_by_surveys(survey_ids: tuple[int, ...]) -> pd.DataFrame:
+    if not survey_ids:
+        return pd.DataFrame()
+    df = get_consolidated_data_for_surveys(list(survey_ids))
+    if df.empty:
+        return df
+    if "question_code" not in df.columns:
+        return pd.DataFrame()
+    return df[df["question_code"].isin(APAC_AREAS_COLS)].copy()
+
+
 @st.cache_data
 def convert_df_to_csv(df_to_convert: pd.DataFrame) -> bytes:
     return df_to_convert.to_csv(index=False).encode("utf-8")
 
 
-def compare_series(a: pd.Series, b: pd.Series) -> pd.Series:
-    a_norm = a.astype("string").str.strip().str.replace(r"\.0+$", "", regex=True)
-    b_norm = b.astype("string").str.strip().str.replace(r"\.0+$", "", regex=True)
-    return a_norm.fillna("<NA>") == b_norm.fillna("<NA>")
+def normalize_key_series(series: pd.Series) -> pd.Series:
+    normalized = series.astype("string").str.strip()
+    normalized = normalized.str.replace(r"\.0$", "", regex=True)
+    return normalized
 
 
 st.title("Teste de Tratamentos")
 st.markdown(
-    "Auditoria dos tratamentos de renda para validar se o pipeline esta extraindo e classificando corretamente."
+    "Auditoria de tratamento das áreas comuns (APAC9P85_1..5), com foco na categorização antes de levar para exportação da Bases Unificadas."
 )
 
 if st.sidebar.button("Atualizar dados desta pagina"):
     st.cache_data.clear()
     st.rerun()
 
-df = load_data()
-if df.empty:
+df_analytics = load_analytics()
+if df_analytics.empty:
     st.error("Sem dados na tabela de analise. Execute a pipeline na pagina de Manutencao e Admin.")
     st.stop()
 
-if "data_pesquisa" not in df.columns:
+if "data_pesquisa" not in df_analytics.columns:
     st.error("A coluna 'data_pesquisa' nao existe na base de analise.")
     st.stop()
 
 years_available = (
-    df["data_pesquisa"].dropna().dt.year.astype(int).sort_values().unique().tolist()
+    df_analytics["data_pesquisa"].dropna().dt.year.astype(int).sort_values().unique().tolist()
 )
 default_years = [2025] if 2025 in years_available else years_available
 
 st.markdown("---")
-st.header("1. Filtros da Auditoria")
-col_f1, col_f2 = st.columns(2)
+st.header("1. Recorte da Auditoria")
+with st.form("areas_tratamento_form"):
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        selected_years = st.multiselect(
+            "Ano(s) para auditoria das áreas",
+            options=years_available,
+            default=default_years,
+        )
+        if not selected_years:
+            selected_years = years_available
 
-with col_f1:
-    selected_years = st.multiselect(
-        "Ano(s) para auditoria",
-        options=years_available,
-        default=default_years,
-    )
-    if not selected_years:
-        selected_years = years_available
+    with col_f2:
+        max_rows_outros = st.number_input(
+            "Maximo de linhas para tabela de 'Outros'",
+            min_value=20,
+            max_value=5000,
+            value=300,
+            step=20,
+        )
 
-with col_f2:
-    max_rows_preview = st.number_input(
-        "Maximo de linhas na previa de divergencias",
-        min_value=20,
-        max_value=2000,
-        value=200,
-        step=20,
-    )
+    apply_clicked = st.form_submit_button("Aplicar recorte de areas", type="primary")
 
-df_filtered = df[df["data_pesquisa"].dt.year.isin(selected_years)].copy()
-if df_filtered.empty:
+if apply_clicked:
+    st.session_state["areas_selected_years"] = selected_years
+    st.session_state["areas_max_rows_outros"] = int(max_rows_outros)
+
+selected_years = st.session_state.get("areas_selected_years", default_years)
+max_rows_outros = st.session_state.get("areas_max_rows_outros", 300)
+
+if not selected_years:
+    st.info("Selecione ao menos um ano para carregar os dados.")
+    st.stop()
+
+df_meta = df_analytics[df_analytics["data_pesquisa"].dt.year.isin(selected_years)].copy()
+if df_meta.empty:
     st.warning("Nenhum registro encontrado para o(s) ano(s) selecionado(s).")
     st.stop()
 
-expected_cols = [
-    "renda_texto_original",
-    "renda_valor_estimado",
-    "renda_faixa_padronizada",
-    "renda_macro_faixa",
-    "renda_classe_agregada",
-    "renda_classe_detalhada",
+meta_cols = [
+    c
+    for c in [
+        "respondent_id",
+        "survey_id",
+        "research_name",
+        "data_pesquisa",
+        "regiao",
+        "localidade",
+        "renda_macro_faixa",
+    ]
+    if c in df_meta.columns
 ]
-missing_cols = [c for c in expected_cols if c not in df_filtered.columns]
-if missing_cols:
-    st.error(
-        f"A base nao tem todas as colunas esperadas para auditoria de renda. Faltando: {', '.join(missing_cols)}."
+
+if "respondent_id" not in meta_cols or "survey_id" not in meta_cols:
+    st.error("A base de analise nao possui as chaves respondent_id/survey_id.")
+    st.stop()
+
+df_meta = df_meta[meta_cols].drop_duplicates(subset=["respondent_id", "survey_id"])
+survey_ids = pd.to_numeric(df_meta["survey_id"], errors="coerce").dropna().astype(int).unique().tolist()
+apac_long = load_apac_long_by_surveys(tuple(sorted(survey_ids)))
+
+st.markdown("---")
+st.header("2. Diagnostico da Origem")
+col_d1, col_d2, col_d3 = st.columns(3)
+col_d1.metric("Respondentes no recorte", f"{len(df_meta):,}")
+col_d2.metric("Surveys no recorte", f"{len(survey_ids):,}")
+col_d3.metric("Respostas APAC longas", f"{len(apac_long):,}")
+
+if apac_long.empty:
+    st.warning(
+        "Nenhuma resposta APAC9P85_1..5 encontrada na consolidated_data para as surveys do recorte."
     )
     st.stop()
 
-# Recalculo das regras de renda
-df_filtered["renda_valor_estimado_recalc"] = df_filtered["renda_texto_original"].apply(
-    calcular_media_faixa
-)
-df_filtered["renda_faixa_padronizada_recalc"] = df_filtered["renda_valor_estimado_recalc"].apply(
-    classificar_faixa_antiga
-)
-df_filtered["renda_macro_faixa_recalc"] = df_filtered["renda_faixa_padronizada_recalc"].apply(
-    map_renda_to_macro_faixa
-)
-
-match_estimado = compare_series(
-    df_filtered["renda_valor_estimado"], df_filtered["renda_valor_estimado_recalc"]
-)
-match_faixa = compare_series(
-    df_filtered["renda_faixa_padronizada"], df_filtered["renda_faixa_padronizada_recalc"]
-)
-match_macro = compare_series(
-    df_filtered["renda_macro_faixa"], df_filtered["renda_macro_faixa_recalc"]
-)
-
-df_filtered["match_estimado"] = match_estimado
-df_filtered["match_faixa"] = match_faixa
-df_filtered["match_macro"] = match_macro
-df_filtered["match_geral_renda"] = (
-    df_filtered["match_estimado"] & df_filtered["match_faixa"] & df_filtered["match_macro"]
-)
-
-st.markdown("---")
-st.header("2. Resumo da Qualidade de Tratamento")
-col_k1, col_k2, col_k3, col_k4 = st.columns(4)
-total = len(df_filtered)
-divergencias = (~df_filtered["match_geral_renda"]).sum()
-col_k1.metric("Registros analisados", f"{total:,}")
-col_k2.metric("Match valor estimado", f"{(match_estimado.mean() * 100):.2f}%")
-col_k3.metric("Match faixa padronizada", f"{(match_faixa.mean() * 100):.2f}%")
-col_k4.metric("Match macro faixa", f"{(match_macro.mean() * 100):.2f}%")
-
-if divergencias > 0:
-    st.warning(f"Foram encontrados {divergencias:,} registros com alguma divergencia de renda.")
-else:
-    st.success("Nenhuma divergencia de renda encontrada para os filtros atuais.")
-
-with st.expander("Distribuicao das colunas de renda"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("**Faixa padronizada (atual)**")
-        st.dataframe(
-            df_filtered["renda_faixa_padronizada"].value_counts(dropna=False).to_frame(
-                "contagem"
-            ),
-            width="stretch",
-        )
-    with c2:
-        st.markdown("**Macro faixa (atual)**")
-        st.dataframe(
-            df_filtered["renda_macro_faixa"].value_counts(dropna=False).to_frame("contagem"),
-            width="stretch",
-        )
-    with c3:
-        st.markdown("**Classe social agregada (atual)**")
-        st.dataframe(
-            df_filtered["renda_classe_agregada"].value_counts(dropna=False).to_frame(
-                "contagem"
-            ),
-            width="stretch",
-        )
-
-st.subheader("Matriz de validacao: faixa atual x faixa recalculada")
-matriz_faixa = pd.crosstab(
-    df_filtered["renda_faixa_padronizada"].fillna("NA"),
-    df_filtered["renda_faixa_padronizada_recalc"].fillna("NA"),
-)
-st.dataframe(matriz_faixa, width="stretch")
-
-st.markdown("---")
-st.header("3. Casos com Divergencia")
-div_df = df_filtered[~df_filtered["match_geral_renda"]].copy()
-cols_div = [
-    "respondent_id",
-    "survey_id",
-    "research_name",
-    "data_pesquisa",
-    "renda_texto_original",
-    "renda_valor_estimado",
-    "renda_valor_estimado_recalc",
-    "renda_faixa_padronizada",
-    "renda_faixa_padronizada_recalc",
-    "renda_macro_faixa",
-    "renda_macro_faixa_recalc",
-    "renda_classe_agregada",
-    "renda_classe_detalhada",
-    "match_estimado",
-    "match_faixa",
-    "match_macro",
-]
-cols_div = [c for c in cols_div if c in div_df.columns]
-
-if div_df.empty:
-    st.info("Sem divergencias para exibir.")
-else:
-    st.dataframe(div_df[cols_div].head(int(max_rows_preview)), width="stretch")
-    st.download_button(
-        label=f"Baixar divergencias ({len(div_df)} linhas)",
-        data=convert_df_to_csv(div_df[cols_div]),
-        file_name="teste_tratamentos_divergencias_renda.csv",
-        mime="text/csv",
+apac_wide = (
+    apac_long.pivot_table(
+        index=["respondent_id", "survey_id"],
+        columns="question_code",
+        values="answer_value",
+        aggfunc="first",
     )
-
-st.markdown("---")
-st.header("4. Áreas Comuns (APAC9P85_1..5)")
-st.markdown(
-    "Classificação das respostas de áreas comuns nas categorias-alvo para validação antes de levar para exportação da Bases Unificadas."
+    .reset_index()
 )
 
-area_cols_present = [c for c in APAC_AREAS_COLS if c in df_filtered.columns]
-if len(area_cols_present) < 1:
-    st.warning("Nenhuma coluna APAC9P85_1..5 encontrada na base filtrada.")
-else:
-    id_cols = [
-        c
-        for c in ["respondent_id", "survey_id", "research_name", "data_pesquisa"]
-        if c in df_filtered.columns
+apac_wide["respondent_id_norm"] = normalize_key_series(apac_wide["respondent_id"])
+apac_wide["survey_id_norm"] = normalize_key_series(apac_wide["survey_id"])
+df_meta["respondent_id_norm"] = normalize_key_series(df_meta["respondent_id"])
+df_meta["survey_id_norm"] = normalize_key_series(df_meta["survey_id"])
+
+df_base = apac_wide.merge(
+    df_meta,
+    on=["respondent_id_norm", "survey_id_norm"],
+    how="left",
+    suffixes=("", "_meta"),
+)
+
+for col in ["respondent_id_meta", "survey_id_meta", "respondent_id_norm", "survey_id_norm"]:
+    if col in df_base.columns:
+        df_base = df_base.drop(columns=col)
+
+area_cols_present = [c for c in APAC_AREAS_COLS if c in df_base.columns]
+if not area_cols_present:
+    st.warning("As colunas APAC9P85_1..5 nao apareceram no pivot da consolidated_data.")
+    st.stop()
+
+id_cols = [
+    c
+    for c in [
+        "respondent_id",
+        "survey_id",
+        "research_name",
+        "data_pesquisa",
+        "regiao",
+        "localidade",
+        "renda_macro_faixa",
     ]
-    area_long = df_filtered[id_cols + area_cols_present].melt(
-        id_vars=id_cols,
-        value_vars=area_cols_present,
-        var_name="pergunta_area",
-        value_name="area_resposta_original",
+    if c in df_base.columns
+]
+
+area_long = df_base[id_cols + area_cols_present].melt(
+    id_vars=id_cols,
+    value_vars=area_cols_present,
+    var_name="pergunta_area",
+    value_name="area_resposta_original",
+)
+area_long["area_resposta_original"] = area_long["area_resposta_original"].astype("string").str.strip()
+area_long["categoria_area_comum"] = area_long["area_resposta_original"].apply(categorizar_area_comum)
+
+st.markdown("---")
+st.header("3. Qualidade da Categorizacao")
+total_linhas = len(area_long)
+sem_resposta = (area_long["categoria_area_comum"] == "Sem resposta").sum()
+outros = (area_long["categoria_area_comum"] == "Outros").sum()
+base_valida = max(total_linhas - sem_resposta, 1)
+categorizadas = total_linhas - sem_resposta - outros
+cobertura = categorizadas / base_valida * 100
+
+c_a1, c_a2, c_a3, c_a4 = st.columns(4)
+c_a1.metric("Respostas APAC analisadas", f"{total_linhas:,}")
+c_a2.metric("Classificadas", f"{categorizadas:,}")
+c_a3.metric("Outros", f"{outros:,}")
+c_a4.metric("Cobertura (sem vazios)", f"{cobertura:.2f}%")
+
+st.caption("Categorias-alvo")
+st.write(" | ".join(AREA_COMUM_CATEGORIAS_ALVO))
+
+col_t1, col_t2 = st.columns(2)
+with col_t1:
+    dist_geral = (
+        area_long["categoria_area_comum"]
+        .value_counts(dropna=False)
+        .rename_axis("categoria")
+        .to_frame("contagem")
     )
+    st.markdown("**Distribuicao geral por categoria**")
+    st.dataframe(dist_geral, width="stretch")
 
-    area_long["area_resposta_original"] = (
-        area_long["area_resposta_original"].astype("string").str.strip()
+with col_t2:
+    dist_por_pergunta = pd.crosstab(
+        area_long["pergunta_area"], area_long["categoria_area_comum"]
     )
-    area_long["categoria_area_comum"] = area_long["area_resposta_original"].apply(
-        categorizar_area_comum
-    )
+    st.markdown("**Distribuicao por pergunta (APAC9P85_1..5)**")
+    st.dataframe(dist_por_pergunta, width="stretch")
 
-    total_linhas = len(area_long)
-    sem_resposta = (area_long["categoria_area_comum"] == "Sem resposta").sum()
-    outros = (area_long["categoria_area_comum"] == "Outros").sum()
-    categorizadas = total_linhas - sem_resposta - outros
+st.subheader("Top respostas originais nao mapeadas (Outros)")
+outros_df = (
+    area_long[area_long["categoria_area_comum"] == "Outros"]["area_resposta_original"]
+    .value_counts()
+    .reset_index()
+)
+if outros_df.empty:
+    st.success("Nenhuma resposta caiu em 'Outros'.")
+else:
+    outros_df.columns = ["area_resposta_original", "contagem"]
+    st.dataframe(outros_df.head(int(max_rows_outros)), width="stretch")
 
-    c_a1, c_a2, c_a3, c_a4 = st.columns(4)
-    c_a1.metric("Respostas APAC analisadas", f"{total_linhas:,}")
-    c_a2.metric("Classificadas", f"{categorizadas:,}")
-    c_a3.metric("Outros", f"{outros:,}")
-    c_a4.metric("Sem resposta", f"{sem_resposta:,}")
+with st.expander("Ver base longa de areas classificadas"):
+    st.dataframe(area_long.head(1000), width="stretch")
 
-    st.caption("Categorias-alvo")
-    st.write(" | ".join(AREA_COMUM_CATEGORIAS_ALVO))
-
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        dist_geral = (
-            area_long["categoria_area_comum"]
-            .value_counts(dropna=False)
-            .rename_axis("categoria")
-            .to_frame("contagem")
-        )
-        st.markdown("**Distribuição geral por categoria**")
-        st.dataframe(dist_geral, width="stretch")
-
-    with col_d2:
-        dist_por_pergunta = pd.crosstab(
-            area_long["pergunta_area"], area_long["categoria_area_comum"]
-        )
-        st.markdown("**Distribuição por pergunta (APAC9P85_1..5)**")
-        st.dataframe(dist_por_pergunta, width="stretch")
-
-    st.subheader("Top respostas originais não mapeadas (Outros)")
-    outros_df = (
-        area_long[area_long["categoria_area_comum"] == "Outros"]["area_resposta_original"]
-        .value_counts()
-        .reset_index()
-    )
-    if outros_df.empty:
-        st.success("Nenhuma resposta caiu em 'Outros'.")
-    else:
-        outros_df.columns = ["area_resposta_original", "contagem"]
-        st.dataframe(outros_df.head(200), width="stretch")
-
-    with st.expander("Ver base longa de áreas classificadas"):
-        st.dataframe(area_long.head(1000), width="stretch")
-
-    st.download_button(
-        label=f"Baixar auditoria de áreas ({len(area_long)} linhas)",
-        data=convert_df_to_csv(area_long),
-        file_name="teste_tratamentos_areas_classificadas.csv",
-        mime="text/csv",
-    )
+st.download_button(
+    label=f"Baixar auditoria de areas ({len(area_long)} linhas)",
+    data=convert_df_to_csv(area_long),
+    file_name="teste_tratamentos_areas_classificadas.csv",
+    mime="text/csv",
+)
