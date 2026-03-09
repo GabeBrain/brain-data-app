@@ -10,3 +10,4 @@ folium
 streamlit-folium
 matplotlib
 scikit-learn
+openpyxl

@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from datetime import date
+from io import BytesIO
 import numpy as np
 import re
 import unicodedata
@@ -48,8 +49,11 @@ def load_consolidated_data_for_surveys(survey_ids: tuple[int, ...]) -> pd.DataFr
 
 
 @st.cache_data
-def convert_df_to_csv(df_to_convert: pd.DataFrame) -> bytes:
-    return df_to_convert.to_csv(index=False).encode("utf-8")
+def convert_df_to_excel(df_to_convert: pd.DataFrame) -> bytes:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_to_convert.to_excel(writer, index=False, sheet_name="Base_Unificada")
+    return output.getvalue()
 
 
 def get_filter_options(df: pd.DataFrame, column: str) -> list[str]:
@@ -837,8 +841,8 @@ with st.container(border=True):
             interviews_count = int(export_payload.get("interviews_count", 0))
             st.download_button(
                 label=f"Baixar base unificada ({interviews_count:,} entrevistas)",
-                data=convert_df_to_csv(export_df),
-                file_name="base_unificada_filtrada.csv",
-                mime="text/csv",
+                data=convert_df_to_excel(export_df),
+                file_name="base_unificada_filtrada.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
