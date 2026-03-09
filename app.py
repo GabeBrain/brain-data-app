@@ -67,6 +67,7 @@ Esta aplicação foi desenvolvida para automatizar o ciclo de vida dos dados de 
 - **`Dashboard de Controle`**: Monitore o andamento da coleta de campo.
 - **`Gerador de Amostra`**: Crie planos de amostragem e extraia amostras otimizadas.
 - **`Bases Unificadas`**: Exporte bases completas por filtros, sem amostragem.
+- **`Teste de Tratamentos`**: Audite a qualidade dos tratamentos (ex.: renda) com foco em divergencias.
 - **`Manutenção e Admin`**: Ferramentas para administradores do sistema.
 """)
 
