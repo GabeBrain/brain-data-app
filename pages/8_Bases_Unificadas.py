@@ -35,6 +35,73 @@ def get_filter_options(df: pd.DataFrame, column: str) -> list[str]:
     return sorted(df[column].dropna().astype(str).unique().tolist())
 
 
+def build_unified_dataframe(
+    filtered_analytics: pd.DataFrame,
+    df_consolidated: pd.DataFrame,
+    output_format: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, str | None]:
+    req_cons_cols = {"respondent_id", "survey_id", "question_code", "answer_value"}
+    if not req_cons_cols.issubset(df_consolidated.columns):
+        return (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            "A tabela consolidated_data nao possui as colunas necessarias para unificacao.",
+        )
+
+    if filtered_analytics.empty:
+        return pd.DataFrame(), pd.DataFrame(), None
+
+    keys = filtered_analytics[["respondent_id", "survey_id"]].drop_duplicates()
+    base_long = df_consolidated.merge(
+        keys,
+        on=["respondent_id", "survey_id"],
+        how="inner",
+    )
+
+    if base_long.empty:
+        return pd.DataFrame(), base_long, None
+
+    if output_format == "Largo (1 linha por respondente)":
+        output_wide = (
+            base_long.pivot_table(
+                index=["respondent_id", "survey_id"],
+                columns="question_code",
+                values="answer_value",
+                aggfunc="first",
+            )
+            .reset_index()
+        )
+        final_df = output_wide.merge(
+            filtered_analytics,
+            on=["respondent_id", "survey_id"],
+            how="left",
+        )
+    else:
+        final_df = base_long.merge(
+            filtered_analytics,
+            on=["respondent_id", "survey_id"],
+            how="left",
+        )
+
+    metadata_priority = [
+        "respondent_id",
+        "survey_id",
+        "research_name",
+        "data_pesquisa",
+        "regiao",
+        "localidade",
+        "renda_macro_faixa",
+        "genero",
+        "faixa_etaria",
+    ]
+    ordered_cols = [c for c in metadata_priority if c in final_df.columns] + [
+        c for c in final_df.columns if c not in metadata_priority
+    ]
+    final_df = final_df[ordered_cols]
+
+    return final_df, base_long, None
+
+
 def apply_base_filters(
     df: pd.DataFrame,
     start_date,
@@ -187,9 +254,31 @@ with st.container(border=True):
         selected_localidade=selected_localidade,
     ).drop_duplicates(subset=["respondent_id", "survey_id"])
 
-    st.markdown("##### Previa da selecao atual (head 30)")
-    st.caption(f"Total de registros na selecao atual: {len(filtered_preview):,}")
-    st.dataframe(filtered_preview.head(30), use_container_width=True)
+    st.markdown("##### Previa da base unificada (head 30)")
+    st.caption(
+        f"Respondentes unicos na selecao atual: {len(filtered_preview):,}"
+    )
+
+    df_consolidated_preview = load_consolidated_data()
+    if df_consolidated_preview.empty:
+        st.warning("A tabela consolidated_data esta vazia.")
+    else:
+        preview_df, _, preview_error = build_unified_dataframe(
+            filtered_analytics=filtered_preview,
+            df_consolidated=df_consolidated_preview,
+            output_format=output_format,
+        )
+        if preview_error:
+            st.error(preview_error)
+        elif preview_df.empty:
+            st.info("Nenhuma linha consolidada encontrada para os filtros atuais.")
+        else:
+            st.caption(f"Linhas da base unificada atual: {len(preview_df):,}")
+            st.caption(f"Total de colunas na base unificada: {preview_df.shape[1]:,}")
+            st.caption(
+                "Dica: role horizontalmente na tabela para visualizar todas as colunas."
+            )
+            st.dataframe(preview_df.head(30), use_container_width=True)
 
     if st.button("Gerar base unificada", type="primary"):
         with st.spinner("Aplicando filtros e montando base unificada..."):
@@ -217,65 +306,20 @@ with st.container(border=True):
                     st.session_state["bases_unificadas_result"] = None
                     st.warning("A tabela consolidated_data esta vazia.")
                 else:
-                    req_cons_cols = {
-                        "respondent_id",
-                        "survey_id",
-                        "question_code",
-                        "answer_value",
-                    }
-                    if not req_cons_cols.issubset(df_consolidated.columns):
+                    final_df, base_long, build_error = build_unified_dataframe(
+                        filtered_analytics=filtered_analytics,
+                        df_consolidated=df_consolidated,
+                        output_format=output_format,
+                    )
+                    if build_error:
                         st.session_state["bases_unificadas_result"] = None
-                        st.error(
-                            "A tabela consolidated_data nao possui as colunas necessarias para unificacao."
+                        st.error(build_error)
+                    elif final_df.empty:
+                        st.session_state["bases_unificadas_result"] = None
+                        st.warning(
+                            "Nenhuma linha consolidada encontrada para os filtros escolhidos."
                         )
                     else:
-                        keys = filtered_analytics[
-                            ["respondent_id", "survey_id"]
-                        ].drop_duplicates()
-                        base_long = df_consolidated.merge(
-                            keys,
-                            on=["respondent_id", "survey_id"],
-                            how="inner",
-                        )
-
-                        if output_format == "Largo (1 linha por respondente)":
-                            output_wide = (
-                                base_long.pivot_table(
-                                    index=["respondent_id", "survey_id"],
-                                    columns="question_code",
-                                    values="answer_value",
-                                    aggfunc="first",
-                                )
-                                .reset_index()
-                            )
-                            final_df = output_wide.merge(
-                                filtered_analytics,
-                                on=["respondent_id", "survey_id"],
-                                how="left",
-                            )
-                        else:
-                            final_df = base_long.merge(
-                                filtered_analytics,
-                                on=["respondent_id", "survey_id"],
-                                how="left",
-                            )
-
-                        metadata_priority = [
-                            "respondent_id",
-                            "survey_id",
-                            "research_name",
-                            "data_pesquisa",
-                            "regiao",
-                            "localidade",
-                            "renda_macro_faixa",
-                            "genero",
-                            "faixa_etaria",
-                        ]
-                        ordered_cols = [
-                            c for c in metadata_priority if c in final_df.columns
-                        ] + [c for c in final_df.columns if c not in metadata_priority]
-                        final_df = final_df[ordered_cols]
-
                         st.session_state["bases_unificadas_result"] = {
                             "df": final_df,
                             "filtered_analytics": filtered_analytics,
