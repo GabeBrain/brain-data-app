@@ -12,7 +12,9 @@ from src.database import (
 from src.data_processing import (
     APAC_AREAS_COLS,
     AREA_COMUM_CATEGORIAS_ALVO,
+    CODIGOS_PARA_TEXTO_ORIGINAL,
     categorizar_area_comum,
+    perguntas_alvo_codigos,
 )
 
 try:
@@ -63,6 +65,98 @@ def normalize_key_series(series: pd.Series) -> pd.Series:
         {"nan": pd.NA, "None": pd.NA, "NaT": pd.NA, "": pd.NA}
     )
     return normalized
+
+
+def natural_code_sort_key(value: str) -> tuple:
+    parts = re.split(r"(\d+)", str(value))
+    key = []
+    for part in parts:
+        if part.isdigit():
+            key.append((0, int(part)))
+        else:
+            key.append((1, part.lower()))
+    return tuple(key)
+
+
+def question_code_bucket(code: str) -> int:
+    c = str(code).upper()
+    if c.startswith("FE"):
+        return 1
+    if c.startswith("PS"):
+        return 2
+    if c.startswith("IC"):
+        return 3
+    if c.startswith("LOC"):
+        return 4
+    if c.startswith("IIA"):
+        return 5
+    if c.startswith("IA"):
+        return 6
+    if c.startswith("APAC"):
+        return 7
+    if c.startswith("SPP"):
+        return 8
+    if c.startswith("CNM"):
+        return 9
+    return 99
+
+
+def build_canonical_question_order(available_codes: list[str]) -> list[str]:
+    if not available_codes:
+        return []
+
+    available_set = set(available_codes)
+    ordered: list[str] = []
+
+    for code in perguntas_alvo_codigos.keys():
+        if code in available_set and code not in ordered:
+            ordered.append(code)
+
+    for code in CODIGOS_PARA_TEXTO_ORIGINAL.keys():
+        if code in available_set and code not in ordered:
+            ordered.append(code)
+
+    leftovers = [c for c in available_codes if c not in ordered]
+    leftovers = sorted(
+        leftovers,
+        key=lambda x: (question_code_bucket(x), natural_code_sort_key(x)),
+    )
+    ordered.extend(leftovers)
+    return ordered
+
+
+def get_question_text_for_code(code: str) -> str:
+    if not isinstance(code, str):
+        return ""
+
+    if code.endswith("_categorizadas"):
+        base_code = code[: -len("_categorizadas")]
+        base_text = get_question_text_for_code(base_code)
+        if base_text:
+            return f"[CATEGORIA] {base_text}"
+        return f"[CATEGORIA] {base_code}"
+
+    mapped_text = CODIGOS_PARA_TEXTO_ORIGINAL.get(code)
+    if isinstance(mapped_text, str) and mapped_text.strip():
+        return mapped_text.strip()
+
+    aliases = perguntas_alvo_codigos.get(code, [])
+    for alias in aliases:
+        if isinstance(alias, str):
+            alias_clean = alias.strip()
+            if alias_clean and alias_clean != code:
+                return alias_clean
+
+    return ""
+
+
+def build_exportable_df_with_question_row(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    first_row = {col: get_question_text_for_code(col) for col in df.columns}
+    first_row_df = pd.DataFrame([first_row])
+    return pd.concat([first_row_df, df], ignore_index=True)
 
 
 def build_normalized_keys(df: pd.DataFrame) -> pd.DataFrame:
@@ -265,6 +359,9 @@ def build_unified_dataframe(
         )
         .reset_index()
     )
+    question_cols_from_pivot = [
+        c for c in output_wide.columns if c not in {"respondent_id", "survey_id"}
+    ]
 
     output_wide["respondent_id_norm"] = normalize_key_series(output_wide["respondent_id"])
     output_wide["survey_id_norm"] = normalize_key_series(output_wide["survey_id"])
@@ -320,42 +417,34 @@ def build_unified_dataframe(
         "faixa_etaria",
     ]
     ordered_priority = [c for c in metadata_priority if c in final_df.columns]
-    non_priority_cols: list[str] = []
-    consumed_non_priority: set[str] = set()
+    ordered_cols = ordered_priority.copy()
+    consumed_cols = set(ordered_priority)
     area_cols_set = set(APAC_AREAS_COLS)
 
+    canonical_question_cols = build_canonical_question_order(question_cols_from_pivot)
+    for qcol in canonical_question_cols:
+        if qcol in final_df.columns and qcol not in consumed_cols:
+            ordered_cols.append(qcol)
+            consumed_cols.add(qcol)
+
+            if qcol in area_cols_set:
+                cat_col = f"{qcol}_categorizadas"
+                if cat_col in final_df.columns and cat_col not in consumed_cols:
+                    ordered_cols.append(cat_col)
+                    consumed_cols.add(cat_col)
+
     for col in final_df.columns:
-        if col in metadata_priority or col in consumed_non_priority:
-            continue
-
-        if col in area_cols_set:
-            non_priority_cols.append(col)
-            consumed_non_priority.add(col)
-
-            cat_col = f"{col}_categorizadas"
-            if cat_col in final_df.columns and cat_col not in consumed_non_priority:
-                non_priority_cols.append(cat_col)
-                consumed_non_priority.add(cat_col)
+        if col in consumed_cols:
             continue
 
         if col.endswith("_categorizadas"):
             base_col = col[: -len("_categorizadas")]
-            if (
-                base_col in area_cols_set
-                and base_col in final_df.columns
-            ):
-                # Ja sera posicionado junto da coluna APAC original.
-                consumed_non_priority.add(col)
+            if base_col in area_cols_set and base_col in final_df.columns:
                 continue
 
-        non_priority_cols.append(col)
-        consumed_non_priority.add(col)
+        ordered_cols.append(col)
+        consumed_cols.add(col)
 
-    for col in final_df.columns:
-        if col not in metadata_priority and col not in consumed_non_priority:
-            non_priority_cols.append(col)
-
-    ordered_cols = ordered_priority + non_priority_cols
     final_df = final_df[ordered_cols]
 
     return final_df, base_long, None, None
@@ -756,6 +845,7 @@ with st.container(border=True):
 if "bases_unificadas_result" in st.session_state and st.session_state["bases_unificadas_result"]:
     result = st.session_state["bases_unificadas_result"]
     final_df = result["df"]
+    exportable_df = build_exportable_df_with_question_row(final_df)
     filtered_analytics = result["filtered_analytics"]
     base_long = result["base_long"]
 
@@ -775,12 +865,15 @@ if "bases_unificadas_result" in st.session_state and st.session_state["bases_uni
     st.subheader("Tabela completa da base unificada")
     st.dataframe(final_df, width="stretch", height=500)
 
+    st.subheader("Tabela final exportavel (linha 1 = texto da pergunta)")
+    st.dataframe(exportable_df, width="stretch", height=500)
+
     st.subheader("Tabela analytics da selecao de filtros")
     st.dataframe(filtered_analytics, width="stretch", height=500)
 
     st.download_button(
-        label=f"Baixar base unificada ({len(final_df)} linhas)",
-        data=convert_df_to_csv(final_df),
+        label=f"Baixar base unificada ({len(final_df)} entrevistas + 1 linha de perguntas)",
+        data=convert_df_to_csv(exportable_df),
         file_name="base_unificada_filtrada.csv",
         mime="text/csv",
         type="primary",
