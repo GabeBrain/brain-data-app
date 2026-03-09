@@ -40,11 +40,9 @@ def apply_base_filters(
     start_date,
     end_date,
     selected_years: list[int],
-    selected_projects: list[str],
     selected_regions: list[str],
     selected_income: list[str],
     selected_localidade: list[str],
-    selected_gender: list[str],
 ) -> pd.DataFrame:
     filtered = df.copy()
 
@@ -58,9 +56,6 @@ def apply_base_filters(
     if selected_years and "data_pesquisa" in filtered.columns:
         filtered = filtered[filtered["data_pesquisa"].dt.year.isin(selected_years)]
 
-    if selected_projects and "research_name" in filtered.columns:
-        filtered = filtered[filtered["research_name"].isin(selected_projects)]
-
     if selected_regions and "regiao" in filtered.columns:
         filtered = filtered[filtered["regiao"].isin(selected_regions)]
 
@@ -69,9 +64,6 @@ def apply_base_filters(
 
     if selected_localidade and "localidade" in filtered.columns:
         filtered = filtered[filtered["localidade"].isin(selected_localidade)]
-
-    if selected_gender and "genero" in filtered.columns:
-        filtered = filtered[filtered["genero"].isin(selected_gender)]
 
     return filtered
 
@@ -167,37 +159,37 @@ with st.container(border=True):
 
     col_f4, col_f5, col_f6 = st.columns(3)
     with col_f4:
-        selected_projects = st.multiselect(
-            "Pesquisa(s)",
-            options=get_filter_options(df_analytics, "research_name"),
-            default=[],
-        )
-    with col_f5:
         selected_regions = st.multiselect(
             "Regiao(oes)",
             options=get_filter_options(df_analytics, "regiao"),
             default=[],
         )
-    with col_f6:
+    with col_f5:
         selected_income = st.multiselect(
             "Renda(s) macro",
             options=get_filter_options(df_analytics, "renda_macro_faixa"),
             default=[],
         )
-
-    col_f7, col_f8 = st.columns(2)
-    with col_f7:
+    with col_f6:
         selected_localidade = st.multiselect(
             "Localidade(s)",
             options=get_filter_options(df_analytics, "localidade"),
             default=[],
         )
-    with col_f8:
-        selected_gender = st.multiselect(
-            "Genero(s)",
-            options=get_filter_options(df_analytics, "genero"),
-            default=[],
-        )
+
+    filtered_preview = apply_base_filters(
+        df=df_analytics,
+        start_date=start_date,
+        end_date=end_date,
+        selected_years=selected_years,
+        selected_regions=selected_regions,
+        selected_income=selected_income,
+        selected_localidade=selected_localidade,
+    ).drop_duplicates(subset=["respondent_id", "survey_id"])
+
+    st.markdown("##### Previa da selecao atual (head 30)")
+    st.caption(f"Total de registros na selecao atual: {len(filtered_preview):,}")
+    st.dataframe(filtered_preview.head(30), use_container_width=True)
 
     if st.button("Gerar base unificada", type="primary"):
         with st.spinner("Aplicando filtros e montando base unificada..."):
@@ -206,11 +198,9 @@ with st.container(border=True):
                 start_date=start_date,
                 end_date=end_date,
                 selected_years=selected_years,
-                selected_projects=selected_projects,
                 selected_regions=selected_regions,
                 selected_income=selected_income,
                 selected_localidade=selected_localidade,
-                selected_gender=selected_gender,
             )
 
             filtered_analytics = filtered_analytics.drop_duplicates(
